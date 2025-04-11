@@ -1,0 +1,288 @@
+{% extends "layouts/base.html" %}
+
+{% block title %} Control de Servos {% endblock %} 
+
+{% block stylesheets %}
+<style>
+    /* Styles from arduino_control.html */
+    .servo-slider {
+        width: 100%;
+    }
+    .servo-card {
+        margin-bottom: 1.5rem;
+        transition: all 0.3s;
+    }
+    .servo-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 20px 0 rgba(0,0,0,.14), 0 7px 10px -5px rgba(156,39,176,.4);
+    }
+    .position-display {
+        font-size: 1.5rem;
+        font-weight: bold;
+        text-align: center;
+        margin: 1rem 0;
+    }
+    .servo-controls {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 1rem;
+    }
+</style>
+{% endblock stylesheets %}
+
+{% block content %}
+<div class="content">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="title">Control de Arduino MEGA 2560</h5>
+                    <p class="category">Controla hasta 30 servomotores</p>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Puerto Arduino</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="arduino-port" placeholder="COM12">
+                                    <div class="input-group-append">
+                                        <button class="btn btn-primary" id="connect-button">Conectar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="connection-status mt-4">
+                                Estado: <span id="connection-status" class="badge badge-secondary">Desconocido</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <button id="reset-all" class="btn btn-warning">Resetear todos los servos</button>
+                        </div>
+                    </div>
+                    
+                    <div class="row" id="servo-container">
+                        <!-- Los servos se generarán dinámicamente con JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block javascripts %}
+<script>
+   $(document).ready(function() {
+    // Configuración
+    const numServos = 30;
+    let servoPositions = Array(numServos).fill(90); // Inicialmente todos en 90°
+    
+    // Verificar estado de conexión al cargar
+    checkConnectionStatus();
+    
+    // Generar tarjetas de servos
+    generateServoCards();
+    
+    // Manejar conexión con Arduino
+    $('#connect-button').on('click', function() {
+        const port = $('#arduino-port').val();
+        connectToArduino(port);
+    });
+    
+    // Resetear todos los servos
+    $('#reset-all').on('click', function() {
+        resetAllServos();
+    });
+    
+    // Funciones
+    function checkConnectionStatus() {
+        $.ajax({
+            url: '/arduino/status',
+            method: 'GET',
+            success: function(response) {
+                if (response.status === 'connected') {
+                    $('#connection-status').removeClass('badge-secondary badge-danger').addClass('badge-success').text('Conectado');
+                    $('#arduino-port').val(response.port);
+                } else {
+                    $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Desconectado');
+                }
+            },
+            error: function() {
+                $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
+            }
+        });
+    }
+    
+    function connectToArduino(port) {
+        $.ajax({
+            url: '/arduino/connect',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ port: port }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    $('#connection-status').removeClass('badge-secondary badge-danger').addClass('badge-success').text('Conectado');
+                    showNotification('success', response.message);
+                } else {
+                    $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
+                    showNotification('danger', response.message);
+                }
+            },
+            error: function(xhr) {
+                $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
+                showNotification('danger', xhr.responseJSON?.message || 'Error al conectar');
+            }
+        });
+    }
+    
+    function generateServoCards() {
+        const container = $('#servo-container');
+        container.empty();
+        
+        for (let i = 0; i < numServos; i++) {
+            const servoId = i + 2; // Pines 2-31
+            const card = `
+                <div class="col-md-4 col-lg-3">
+                    <div class="card servo-card">
+                        <div class="card-header">
+                            <h6 class="card-title">Servo #${servoId}</h6>
+                            <p class="card-category">Pin ${servoId}</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="position-display" id="position-${servoId}">${servoPositions[i]}°</div>
+                            <input type="range" class="form-range servo-slider" 
+                                   min="0" max="180" value="${servoPositions[i]}" 
+                                   id="slider-${servoId}" data-servo-id="${servoId}">
+                            <div class="d-flex justify-content-between">
+                                <small>0°</small>
+                                <small>90°</small>
+                                <small>180°</small>
+                            </div>
+                            <div class="servo-controls">
+                                <button class="btn btn-sm btn-info set-0" data-servo-id="${servoId}">0°</button>
+                                <button class="btn btn-sm btn-info set-90" data-servo-id="${servoId}">90°</button>
+                                <button class="btn btn-sm btn-info set-180" data-servo-id="${servoId}">180°</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.append(card);
+        }
+        
+        // Actualizar el display mientras el usuario mueve el slider (sin enviar petición)
+        $('.servo-slider').on('input', function() {
+            const servoId = $(this).data('servo-id');
+            const position = parseInt($(this).val());
+            $(`#position-${servoId}`).text(position + '°');
+        });
+        
+        // Enviar la petición solo cuando el usuario suelta el slider
+        $('.servo-slider').on('change', function() {
+            const servoId = $(this).data('servo-id');
+            const position = parseInt($(this).val());
+            moveServo(servoId, position);
+        });
+        
+        $('.set-0').on('click', function() {
+            const servoId = $(this).data('servo-id');
+            $(`#slider-${servoId}`).val(0);
+            $(`#position-${servoId}`).text('0°'); // Actualizar visualmente de inmediato
+            moveServo(servoId, 0);
+        });
+
+        $('.set-90').on('click', function() {
+            const servoId = $(this).data('servo-id');
+            $(`#slider-${servoId}`).val(90);
+            $(`#position-${servoId}`).text('90°'); // Actualizar visualmente de inmediato
+            moveServo(servoId, 90);
+        });
+
+        $('.set-180').on('click', function() {
+            const servoId = $(this).data('servo-id');
+            $(`#slider-${servoId}`).val(180);
+            $(`#position-${servoId}`).text('180°'); // Actualizar visualmente de inmediato
+            moveServo(servoId, 180);
+        });
+    }
+    
+    function moveServo(servoId, position) {
+        // Guardar la posición anterior para recuperarla en caso de error
+        const previousPosition = servoPositions[servoId - 2];
+        
+        // Actualizar la posición localmente de inmediato
+        servoPositions[servoId - 2] = position;
+        
+        $.ajax({
+            url: '/arduino/set_servo',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                servo_id: servoId,
+                angle: position
+            }),
+            success: function(response) {
+                if (response.status !== 'success') {
+                    // Revertir en caso de error en respuesta
+                    $(`#position-${servoId}`).text(previousPosition + '°');
+                    $(`#slider-${servoId}`).val(previousPosition);
+                    servoPositions[servoId - 2] = previousPosition;
+                    showNotification('danger', response.message);
+                }
+            },
+            error: function(xhr) {
+                // Revertir en caso de error de comunicación
+                $(`#position-${servoId}`).text(previousPosition + '°');
+                $(`#slider-${servoId}`).val(previousPosition);
+                servoPositions[servoId - 2] = previousPosition;
+                showNotification('danger', xhr.responseJSON?.message || 'Error al mover servo');
+            }
+        });
+    }  
+    
+    function resetAllServos() {
+        $.ajax({
+            url: '/arduino/reset_servos',
+            method: 'POST',
+            success: function(response) {
+                if (response.status === 'success') {
+                    showNotification('success', response.message);
+                    
+                    // Actualizar todos los sliders a 90°
+                    for (let i = 0; i < numServos; i++) {
+                        const servoId = i + 2;
+                        $(`#slider-${servoId}`).val(90);
+                        $(`#position-${servoId}`).text('90°');
+                        servoPositions[i] = 90;
+                    }
+                } else {
+                    showNotification('danger', response.message);
+                }
+            },
+            error: function(xhr) {
+                showNotification('danger', xhr.responseJSON?.message || 'Error al resetear servos');
+            }
+        });
+    }
+    
+    function showNotification(type, message) {
+        $.notify({
+            icon: type === 'success' ? 'tim-icons icon-check-2' : 'tim-icons icon-alert-circle-exc',
+            message: message
+        }, {
+            type: type,
+            timer: 4000,
+            placement: {
+                from: 'top',
+                align: 'right'
+            }
+        });
+    }
+});
+</script>
+{% endblock javascripts %}

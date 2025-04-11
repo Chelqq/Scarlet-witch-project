@@ -1,0 +1,108 @@
+{% extends "layouts/base.html" %}
+
+{% block title %} Hand Control {% endblock %} 
+
+<!-- Specific Page CSS goes HERE  -->
+{% block stylesheets %}
+<style>
+  /* Asegurar que el contenedor tenga un espacio adecuado */
+  .content {
+    margin-top: 50px; /* Ajustar para bajar las cámaras más abajo */
+  }
+  
+  /* Estilo para los recuadros de las cámaras */
+  .camera-box {
+    width: 100%;
+    max-width: 640px;
+    height: 480px;
+    border: 2px solid #333;
+    background-color: #f0f0f0;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  
+  .camera-title {
+    margin-bottom: 10px;
+    font-weight: bold;
+  }
+
+  /* Alinear el contenido al centro */
+  .camera-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+  }
+  
+  /* Estilo para las instrucciones */
+  .instructions {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    border-left: 4px solid #007bff;
+  }
+  
+  .finger-status {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+  }
+  
+  .finger {
+    padding: 10px;
+    margin: 5px;
+    border-radius: 5px;
+    text-align: center;
+    width: 100px;
+  }
+  
+  .up {
+    background-color: #28a745;
+    color: white;
+  }
+  
+  .down {
+    background-color: #dc3545;
+    color: white;
+  }
+</style>
+{% endblock stylesheets %}
+
+{% block content %}
+  <div class="container">
+    <div class="row">
+      <div class="col-md-12">
+        <h1 class="text-center">Hand Gesture Servo Control</h1>
+        <div class="instructions">
+          <h4>Instructions:</h4>
+          <p>Show your hand to the camera. The system will detect which fingers are raised every 5 seconds and control the servos accordingly:</p>
+          <ul>
+            <li><strong>Thumb up:</strong> Servo 2 will move to 180°</li>
+            <li><strong>Index finger up:</strong> Servo 3 will move to 180°</li>
+            <li><strong>Middle finger up:</strong> Servo 4 will move to 180°</li>
+            <li><strong>Ring finger up:</strong> Servo 5 will move to 180°</li>
+            <li><strong>Pinky finger up:</strong> Servo 6 will move to 180°</li>
+          </ul>
+          <p>When a finger is down, the corresponding servo will move to 0°.</p>
+        </div>
+      </div>
+    </div>
+    <div class="row camera-container">
+      <!-- Cam 1 -->
+      <div class="camera-box">
+        <div class="camera-title">Cam 0 (Integrada) | Hand Tracking</div>
+        <img src="{{ url_for('video_feed_1') }}" class="img-fluid" alt="Cam 0 feed not available">
+      </div>
+      <!-- Cam 0 -->
+      <div class="camera-box">
+        <div class="camera-title">Cam 1 (USB) | Hand Tracking</div>
+        <img src="{{ url_for('video_feed_0') }}" class="img-fluid" alt="Cam 1 feed not available">
+      </div>
+    </div>
+  </div>
+{% endblock content %}
+
+<!-- Specific Page JS goes HERE  -->
+{% block javascripts %}{% endblock javascripts %}

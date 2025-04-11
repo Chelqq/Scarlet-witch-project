@@ -1,0 +1,83 @@
+{% extends "layouts/base.html" %}
+
+{% block title %} Manual de Usuario - Interfaz de Control del Robot InMoov {% endblock %} 
+
+{% block stylesheets %}{% endblock stylesheets %}
+
+{% block content %}
+
+  <div class="content">
+    <div class="row">
+      <div class="col-md-12">
+        <div class="card">
+          <div class="card-header text-center">
+            <h1 class="card-title">Manual de Usuario - Interfaz de Control del Robot InMoov</h1>
+          </div>
+          <div class="card-body">
+            
+            <div class="row align-items-center">
+              <div class="col-md-8">
+                <h2 class="text-primary">1. Introducción</h2>
+                <p>Este manual describe el uso de la Interfaz de Control del Robot InMoov, una aplicación web diseñada para controlar el robot humanoide de código abierto InMoov.</p>
+                <h2 class="text-primary">2. Descripción del Robot</h2>
+                <p>InMoov es un robot humanoide de tamaño real, diseñado para ser impreso en 3D y animado. Creado por <a href="https://inmoov.fr/" target="_blank">Gael Langevin</a>, este proyecto de código abierto facilita el acceso a la robótica avanzada.</p>
+              </div>
+              <div class="col-md-4 text-center">
+                <img src="https://inmoov.fr/wp-content/uploads/2013/07/InMoov-5signa.jpg" class="img-fluid rounded" alt="Robot InMoov">
+              </div>
+            </div>
+            
+            <h2 class="text-primary">3. Características Principales</h2>
+            
+            <h3 class="text-success">3.1 Control de Movimiento</h3>
+            <ul>
+              <li><strong>Movimientos Articulados de la Mano:</strong> Control de cada dedo mediante sliders.</li>
+              <li><strong>Posicionamiento del Brazo:</strong> Manejo del hombro, codo y muñeca a través de cinemática directa.</li>
+              <li><strong>Control de Cabeza y Cuello:</strong> Ajuste intuitivo de la mirada mediante controles de inclinación.</li>
+              <li><strong>Biblioteca de Poses:</strong> Guardado y carga de posiciones comunes para acceso rápido.</li>
+              <li><strong>Programación de Secuencias:</strong> Creación, guardado y reproducción de secuencias de movimiento.</li>
+            </ul>
+
+            <!-- <h3 class="text-success">3.2 Capacidades de Interacción</h3>
+            <ul>
+              <li><strong>Centro de Comandos de Voz:</strong> Envío de comandos de texto a voz a InMoov.</li>
+              <li><strong>Integración de Reconocimiento de Voz:</strong> Permite al robot responder a comandos verbales.</li>
+              <li><strong>Visualización de Sensores:</strong> Datos en tiempo real de temperatura, posición y presión.</li>
+              <li><strong>Visualización de Cámara:</strong> Acceso a la vista del robot mediante soporte de cámara integrada.</li>
+              <li><strong>Conciencia Ambiental:</strong> Monitorización de la percepción del entorno del robot.</li>
+            </ul>
+             -->
+            <h2 class="text-primary">4. Configuración Técnica</h2>
+            <p>La aplicación usa un backend basado en Flask (Python), que se comunica con los sistemas de control del robot mediante conexiones seriales y protocolos personalizados.</p>
+            
+            <h2 class="text-primary">5. Guía de Uso</h2>
+            <ol>
+              <li>Acceder a la aplicación ingresando la dirección IP del servidor en un navegador compatible.</li>
+              <li>Iniciar sesión con credenciales de usuario (o acceder como invitado con funciones limitadas).</li>
+              <li>Navegar por los paneles de control a través del menú.</li>
+              <li>Utilizar los controles deslizantes y botones en la sección "Controles Rápidos" para ejecutar movimientos básicos.</li>
+              <li>Guardar configuraciones y secuencias de movimiento para su reutilización.</li>
+            </ol>
+            
+            <h2 class="text-primary">6. Aplicaciones Educativas</h2>
+            <ul>
+              <li>Explorar principios de robótica mediante interacción directa con el robot.</li>
+              <li>Comprender sistemas mecánicos a través del control de movimientos.</li>
+              <li>Aprender programación creando secuencias de movimiento personalizadas.</li>
+              <li>Desarrollar habilidades de resolución de problemas en robótica.</li>
+            </ul>
+            
+            <h2 class="text-primary">7. Desarrollo Futuro</h2>
+            <ul>
+              <li>Implementación de aprendizaje automático para mejorar los movimientos del robot.</li>
+              <li>Mejoras en visión por computadora para reconocimiento avanzado de objetos.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+{% endblock content %}
+
+{% block javascripts %}{% endblock javascripts %}
