@@ -164,8 +164,8 @@ def gen_video_feed(camera_id):
     # Create a new instance of MediaPipe Hands for this camera
     hands = mp_hands.Hands(
         model_complexity=0,  # 0 for fastest performance, 1 for better accuracy
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
+        min_detection_confidence=0.7,
+        min_tracking_confidence=0.7,
         max_num_hands=1
     )
     
