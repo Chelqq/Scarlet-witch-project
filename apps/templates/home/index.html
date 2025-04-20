@@ -77,6 +77,51 @@
 
 {% block javascripts %}
 <script>
+    // Funciones
+    function checkConnectionStatus() {
+        $.ajax({
+            url: '/arduino/status',
+            method: 'GET',
+            success: function(response) {
+                if (response.status === 'connected') {
+                    $('#connection-status').removeClass('badge-secondary badge-danger').addClass('badge-success').text('Conectado');
+                    $('#arduino-port').val(response.port);
+                } else {
+                    $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Desconectado');
+                }
+            },
+            error: function() {
+                $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
+            }
+        });
+    }
+        
+        // Función para enviar comandos al ESP32
+    function sendServoCommandToESP32(servo_id, angle, esp32IP) {
+        if (!esp32IP) {
+            alert("Por favor, ingrese la IP del ESP32");
+            return;
+        }
+        
+        fetch(`http://${esp32IP}/set_servo`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ servo_id: servo_id, angle: angle })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Respuesta del ESP32:', data);
+            // Actualizar UI según sea necesario
+        })
+        .catch(error => {
+            console.error('Error enviando comando al ESP32:', error);
+            // Mostrar error en la UI
+        });
+    }
+
+
    $(document).ready(function() {
     // Configuración
     const numServos = 30;
@@ -99,24 +144,6 @@
         resetAllServos();
     });
     
-    // Funciones
-    function checkConnectionStatus() {
-        $.ajax({
-            url: '/arduino/status',
-            method: 'GET',
-            success: function(response) {
-                if (response.status === 'connected') {
-                    $('#connection-status').removeClass('badge-secondary badge-danger').addClass('badge-success').text('Conectado');
-                    $('#arduino-port').val(response.port);
-                } else {
-                    $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Desconectado');
-                }
-            },
-            error: function() {
-                $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
-            }
-        });
-    }
     
     function connectToArduino(port) {
         $.ajax({
