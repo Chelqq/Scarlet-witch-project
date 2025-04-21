@@ -30,46 +30,84 @@ def status():
 @blueprint.route('/connect', methods=['POST'])
 @login_required
 def connect():
-    """Intenta conectar con Arduino"""
+    """Intenta conectar con Arduino (directo o a través de ESP32)"""
     try:
         global arduino_controller
         data = request.json or {}
-        port = data.get('port', 'COM12')
-        baud_rate = data.get('baud_rate', 9600)
         
-        app.logger.info(f"Attempting to connect to port {port} with baud rate {baud_rate}")
+        # Verificar si es conexión TCP o serie
+        use_tcp = data.get('use_tcp', False)
         
-        if arduino_controller is None:
-            app.logger.info("Controller is None, initializing with provided parameters")
-            arduino_controller = init_arduino(port=port, baud_rate=baud_rate)
+        if use_tcp:
+            # Modo TCP/IP a través de ESP32
+            host = data.get('host', '')
+            port = data.get('port', 8888)
+            
+            app.logger.info(f"Attempting to connect via TCP/IP to ESP32 at {host}:{port}")
             
             if arduino_controller is None:
-                app.logger.error("Failed to initialize controller")
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Failed to initialize Arduino controller'
-                }), 500
+                app.logger.info("Controller is None, initializing with TCP parameters")
+                arduino_controller = ArduinoController(host=host, port=port, use_tcp=True)
+                
+                if arduino_controller is None:
+                    app.logger.error("Failed to initialize controller")
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Failed to initialize ESP32 WiFi controller'
+                    }), 500
+            else:
+                # Update settings if changed
+                if host != arduino_controller.host or port != arduino_controller.tcp_port or not arduino_controller.use_tcp:
+                    arduino_controller.host = host
+                    arduino_controller.tcp_port = port
+                    arduino_controller.use_tcp = True
+                    app.logger.info(f"Updated TCP settings: {host}:{port}")
         else:
-            if port != arduino_controller.port:
-                arduino_controller.port = port
-                app.logger.info(f"Updated port to {port}")
-            if baud_rate != arduino_controller.baud_rate:
-                arduino_controller.baud_rate = baud_rate
-                app.logger.info(f"Updated baud rate to {baud_rate}")
+            # Modo serie directo con Arduino
+            serial_port = data.get('serial_port', 'COM12')
+            baud_rate = data.get('baud_rate', 9600)
+            
+            app.logger.info(f"Attempting to connect directly to Arduino on {serial_port}")
+            
+            if arduino_controller is None:
+                app.logger.info("Controller is None, initializing with Serial parameters")
+                arduino_controller = ArduinoController(
+                    use_tcp=False, 
+                    serial_port=serial_port, 
+                    baud_rate=baud_rate
+                )
+                
+                if arduino_controller is None:
+                    app.logger.error("Failed to initialize controller")
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Failed to initialize Arduino controller'
+                    }), 500
+            else:
+                # Update settings if changed
+                if serial_port != arduino_controller.serial_port or baud_rate != arduino_controller.baud_rate or arduino_controller.use_tcp:
+                    arduino_controller.serial_port = serial_port
+                    arduino_controller.baud_rate = baud_rate
+                    arduino_controller.use_tcp = False
+                    app.logger.info(f"Updated serial settings: {serial_port}, {baud_rate}")
         
         app.logger.info("Attempting to connect")
         success = arduino_controller.connect()
         app.logger.info(f"Connection result: {success}")
         
         if success:
+            connection_type = "ESP32 WiFi" if arduino_controller.use_tcp else "Arduino directo"
+            connection_details = f"ESP32 en {arduino_controller.host}:{arduino_controller.tcp_port}" if arduino_controller.use_tcp else f"Arduino en {arduino_controller.serial_port}"
+            
             return jsonify({
                 'status': 'success',
-                'message': f'Conectado a Arduino en {port}'
+                'message': f'Conectado a {connection_details}',
+                'connection_type': connection_type
             })
         else:
             return jsonify({
                 'status': 'error',
-                'message': 'No se pudo conectar con Arduino'
+                'message': 'No se pudo conectar con el dispositivo'
             }), 500
     
     except Exception as e:
