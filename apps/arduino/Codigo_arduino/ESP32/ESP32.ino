@@ -1,72 +1,77 @@
 #include <WiFi.h>
-#include <WebServer.h>
-#include <ArduinoJson.h>
+#include <HardwareSerial.h>
 
-const char* ssid = "_JIMENEZ_";
+// Configuración Wi-Fi - cambia estos valores a tu red WiFi
+const char* ssid = "_JIMENEZ";
 const char* password = "7163350391";
 
-WebServer server(80);
+// Puerto del servidor TCP
+const int serverPort = 8888;
+WiFiServer server(serverPort);
+WiFiClient client;
+
+// Puerto serie para comunicación con Arduino MEGA
+HardwareSerial ArduinoSerial(2); // UART2 en ESP32
 
 void setup() {
-  Serial.begin(9600);  // Mismo baudrate que usa tu Arduino Mega
+  // Iniciar puerto serie de depuración
+  Serial.begin(115200);
+  delay(10);
   
-  WiFi.mode(WIFI_STA);
+  // Iniciar puerto serie para comunicación con Arduino MEGA
+  ArduinoSerial.begin(9600, SERIAL_8N1, 16, 17); // RX=16, TX=17 (puedes cambiar a los pines que uses)
+  
+  // Conectar a WiFi
+  Serial.println();
+  Serial.print("Conectando a ");
+  Serial.println(ssid);
+  
   WiFi.begin(ssid, password);
   
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
+    Serial.print(".");
   }
   
-  // Manejador para solicitudes OPTIONS (CORS)
-  server.on("/set_servo", HTTP_OPTIONS, []() {
-    server.sendHeader("Access-Control-Allow-Origin", "*");
-    server.sendHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-    server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
-    server.send(204); // No content
-  });
+  Serial.println("");
+  Serial.println("WiFi conectado");
+  Serial.println("Dirección IP: ");
+  Serial.println(WiFi.localIP());
   
-  server.on("/set_servo", HTTP_POST, handleServo);
-  server.on("/test", HTTP_GET, handleTest);
-  
+  // Iniciar servidor TCP
   server.begin();
-  
-  Serial.println("ESP32 IP: " + WiFi.localIP().toString());
+  Serial.println("Servidor TCP iniciado");
 }
 
 void loop() {
-  server.handleClient();
-}
-
-void handleTest() {
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.send(200, "text/plain", "ESP32 esta en linea");
-}
-
-void handleServo() {
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.sendHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-  server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
-  
-  if (server.hasArg("plain")) {
-    String body = server.arg("plain");
-    DynamicJsonDocument doc(1024);
-    
-    DeserializationError error = deserializeJson(doc, body);
-    if (!error) {
-      int servo_id = doc["servo_id"];  // Mantiene el mismo formato que usa tu aplicación
-      int angle = doc["angle"];
-      
-      // Formar el mismo formato de comando que espera tu Arduino Mega
-      String command = String(servo_id) + "," + String(angle) + "\n";
-      
-      // Enviar al Arduino Mega
-      Serial.print(command);
-      
-      server.send(200, "application/json", "{\"status\":\"success\",\"message\":\"Comando enviado\"}");
-    } else {
-      server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+  // Comprobar si hay clientes nuevos
+  if (!client || !client.connected()) {
+    client = server.available();
+    if (client) {
+      Serial.println("Nuevo cliente conectado");
+      client.println("Conectado al puente ESP32-Arduino");
     }
-  } else {
-    server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"No data received\"}");
+  }
+  
+  // Comprobar si hay datos desde el cliente TCP
+  if (client && client.connected() && client.available()) {
+    String data = client.readStringUntil('\n');
+    Serial.print("Recibido del cliente: ");
+    Serial.println(data);
+    
+    // Reenviar datos al Arduino
+    ArduinoSerial.println(data);
+  }
+  
+  // Comprobar si hay datos desde el Arduino
+  if (ArduinoSerial.available()) {
+    String response = ArduinoSerial.readStringUntil('\n');
+    Serial.print("Recibido del Arduino: ");
+    Serial.println(response);
+    
+    // Reenviar respuesta al cliente TCP
+    if (client && client.connected()) {
+      client.println(response);
+    }
   }
 }
