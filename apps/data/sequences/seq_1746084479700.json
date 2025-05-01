@@ -1,0 +1,14 @@
+{
+  "id": "seq_1746084479700",
+  "name": "Alejandro",
+  "description": "Lady Gaga",
+  "loop": false,
+  "defaultDelay": 100,
+  "steps": [
+    {
+      "servo_id": 2,
+      "angle": 90,
+      "delay": 100
+    }
+  ]
+}

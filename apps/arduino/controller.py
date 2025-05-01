@@ -5,7 +5,7 @@ import time
 import threading
 import logging
 import serial.tools.list_ports
-from apps.arduino.controller import ArduinoController
+#from apps.arduino.controller import ArduinoController
 
 logger = logging.getLogger(__name__)
 
@@ -490,7 +490,7 @@ class ArduinoController:
         logging.info("Se han aplicado las mejoras de concurrencia a ArduinoController")
         
     # Aplica los parches cuando se importa este módulo
-    patch_arduino_controller()
+    #patch_arduino_controller()
 
 # Singleton para usar en toda la aplicación
 arduino_controller = None

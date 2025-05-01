@@ -1,0 +1,106 @@
+/* Estilos para el modal de secuencias */
+.modal-content {
+    background-color: #ffffff;
+    color: #333333;
+  }
+  
+  .modal-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+  }
+  
+  .modal-body {
+    background-color: #ffffff;
+  }
+  
+  .modal-footer {
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+  }
+  
+  .form-control {
+    background-color: #ffffff;
+    color: #333333;
+    border: 1px solid #ced4da;
+  }
+  
+  .sequence-step {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+  }
+  
+  .form-check-input {
+    background-color: #ffffff;
+  }
+  
+  /* Botones con mejor visibilidad */
+  .btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: white;
+  }
+  
+  .btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+  }
+  
+  /* Estilos para campos de entrada */
+  input[type="number"], 
+  input[type="text"], 
+  textarea {
+    color: #333333;
+    background-color: #ffffff;
+  }
+  
+  /* Mejorar contraste para textos */
+  label {
+    color: #212529;
+    font-weight: 500;
+  }
+
+  /* Estilos para la parte inferior del modal */
+.modal-footer {
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+  }
+  
+  /* Asegurar que todo el modal sea visible */
+  .modal-dialog {
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  /* Estilo para la configuración general */
+  .form-check {
+    padding: 10px 0;
+    color: #333;
+  }
+  
+  /* Mejorar visibilidad de botones de acción */
+  .btn-primary.guardar {
+    background-color: #6f42c1;
+    border-color: #6f42c1;
+  }
+  
+  .btn-secondary.cancelar {
+    background-color: #495057;
+    border-color: #495057;
+  }
+  
+  /* Campo de retardo */
+  input[type="number"].delay-input {
+    width: 100px;
+    display: inline-block;
+    color: #333;
+    background-color: #fff;
+    border: 1px solid #ced4da;
+  }
