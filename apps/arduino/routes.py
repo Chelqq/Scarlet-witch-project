@@ -3,11 +3,12 @@
 from apps.arduino import blueprint
 from flask import request, jsonify
 from flask_login import login_required
-from apps.arduino.controller import arduino_controller, init_arduino
-import serial
-import serial.tools.list_ports
+from apps.arduino.controller import arduino_controller, init_arduino, ArduinoController
 from flask import current_app as app
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 @blueprint.route('/status')
 @login_required
@@ -18,10 +19,19 @@ def status():
         init_arduino()
         
     if arduino_controller and arduino_controller.is_connected():
-        return jsonify({
-            'status': 'connected',
-            'port': arduino_controller.port
-        })
+        if arduino_controller.use_tcp:
+            return jsonify({
+                'status': 'connected',
+                'connection_type': 'wifi',
+                'host': arduino_controller.host,
+                'port': arduino_controller.tcp_port
+            })
+        else:
+            return jsonify({
+                'status': 'connected',
+                'connection_type': 'serial',
+                'port': arduino_controller.serial_port
+            })
     else:
         return jsonify({
             'status': 'disconnected'
@@ -47,7 +57,11 @@ def connect():
             
             if arduino_controller is None:
                 app.logger.info("Controller is None, initializing with TCP parameters")
-                arduino_controller = ArduinoController(host=host, port=port, use_tcp=True)
+                arduino_controller = init_arduino(
+                    host=host, 
+                    port=port, 
+                    use_tcp=True
+                )
                 
                 if arduino_controller is None:
                     app.logger.error("Failed to initialize controller")
@@ -71,10 +85,10 @@ def connect():
             
             if arduino_controller is None:
                 app.logger.info("Controller is None, initializing with Serial parameters")
-                arduino_controller = ArduinoController(
-                    use_tcp=False, 
+                arduino_controller = init_arduino(
                     serial_port=serial_port, 
-                    baud_rate=baud_rate
+                    baud_rate=baud_rate,
+                    use_tcp=False
                 )
                 
                 if arduino_controller is None:
@@ -127,8 +141,8 @@ def set_servo():
     try:
         global arduino_controller
         if arduino_controller is None:
-            app.logger.error("Controller is None, trying to initialize with specific port")
-            arduino_controller = init_arduino(port="COM12")
+            app.logger.error("Controller is None, trying to initialize with default settings")
+            arduino_controller = init_arduino()
             
         if arduino_controller is None:
             app.logger.error("Controller is still None after initialization attempt")
@@ -144,18 +158,19 @@ def set_servo():
         app.logger.info(f"Setting servo_id {servo_id} to angle {angle}")
         
         if not arduino_controller.is_connected():
-            app.logger.info("Not connected, please connect first")
-            return jsonify({
-                'status': 'error',
-                'message': 'Arduino not connected. Please connect first.'
-            }), 400
+            app.logger.info("Not connected, attempting to connect")
+            if not arduino_controller.connect():
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Arduino not connected. Please connect first.'
+                }), 400
         
         # Set timeout for the operation
         start_time = time.time()
         success, message = arduino_controller.set_servo(servo_id, angle)
         
         if time.time() - start_time > 1.0:  # If operation took too long
-            app.logger.error(f"Command execution took long time for servo_id {servo_id}, angle {angle}")
+            app.logger.warning(f"Command execution took long time for servo_id {servo_id}, angle {angle}")
         
         app.logger.info(f"set_servo result: success={success}, message={message}")
         
@@ -196,10 +211,12 @@ def reset_servos():
         }), 500
         
     if not arduino_controller.is_connected():
-        return jsonify({
-            'status': 'error',
-            'message': 'Arduino not connected. Please connect first.'
-        }), 400
+        # Intentar conectar automáticamente
+        if not arduino_controller.connect():
+            return jsonify({
+                'status': 'error',
+                'message': 'Arduino not connected. Please connect first.'
+            }), 400
         
     success, messages = arduino_controller.reset_servos()
     
@@ -223,6 +240,9 @@ def diagnostico():
         import serial
         import serial.tools.list_ports
         
+        if arduino_controller is None:
+            init_arduino()
+            
         puertos = []
         for p in serial.tools.list_ports.comports():
             puertos.append({
@@ -232,19 +252,26 @@ def diagnostico():
             })
         
         config_actual = {
-            'puerto_configurado': arduino_controller.port if arduino_controller else 'No inicializado',
+            'puerto_configurado': arduino_controller.serial_port if arduino_controller else 'No inicializado',
             'baud_rate': arduino_controller.baud_rate if arduino_controller else 'No inicializado',
             'estado_conexion': 'Conectado' if (arduino_controller and arduino_controller.is_connected()) else 'Desconectado'
         }
         
         info_adicional = {}
-        if arduino_controller and arduino_controller.arduino:
-            try:
-                info_adicional['arduino_abierto'] = arduino_controller.arduino.is_open
-                info_adicional['arduino_nombre'] = arduino_controller.arduino.name
-                info_adicional['arduino_timeout'] = arduino_controller.arduino.timeout
-            except Exception as e:
-                info_adicional['error'] = f'No se pudo obtener información adicional: {str(e)}'
+        if arduino_controller:
+            if arduino_controller.use_tcp:
+                info_adicional['modo_conexion'] = 'TCP/IP'
+                info_adicional['host'] = arduino_controller.host
+                info_adicional['tcp_port'] = arduino_controller.tcp_port
+            else:
+                info_adicional['modo_conexion'] = 'Serial'
+                if arduino_controller.arduino:
+                    try:
+                        info_adicional['arduino_abierto'] = arduino_controller.arduino.is_open
+                        info_adicional['arduino_nombre'] = arduino_controller.arduino.name
+                        info_adicional['arduino_timeout'] = arduino_controller.arduino.timeout
+                    except Exception as e:
+                        info_adicional['error'] = f'No se pudo obtener información adicional: {str(e)}'
         
         import pkg_resources
         pyserial_version = pkg_resources.get_distribution("pyserial").version

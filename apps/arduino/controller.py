@@ -9,7 +9,7 @@ import serial.tools.list_ports
 logger = logging.getLogger(__name__)
 
 class ArduinoController:
-    def __init__(self, host=None, port=8888, use_tcp=True, serial_port=None, baud_rate=9600):
+    def __init__(self, host=None, port=8888, use_tcp=False, serial_port=None, baud_rate=9600):
         self.use_tcp = use_tcp
         
         # Configuración TCP/IP para ESP32
@@ -26,10 +26,16 @@ class ArduinoController:
         self.lock = threading.RLock()
         self.servo_pins = [i for i in range(2, 32)]
         
+        # New: watchdog timer para reconexión automática
+        self.watchdog_active = False
+        self.watchdog_thread = None
+        self.last_command_time = time.time()
+        
         connection_type = f"TCP/IP ({host}:{port})" if use_tcp else f"Serial ({serial_port})"
         logger.info(f"ArduinoController initialized with {connection_type}")
 
     def get_available_ports(self):
+        """Obtiene una lista de puertos seriales disponibles"""
         ports = []
         for port in serial.tools.list_ports.comports():
             ports.append({
@@ -38,6 +44,41 @@ class ArduinoController:
                 'hwid': port.hwid
             })
         return ports
+
+    def _start_watchdog(self):
+        """Inicia un watchdog para mantener la conexión"""
+        if self.watchdog_active:
+            return
+            
+        self.watchdog_active = True
+        
+        def watchdog_function():
+            while self.watchdog_active:
+                try:
+                    # Si han pasado más de 30 segundos desde el último comando, verificar conexión
+                    if time.time() - self.last_command_time > 30:
+                        logger.info("Watchdog: verificando conexión...")
+                        if not self._test_connection():
+                            logger.warning("Watchdog: conexión perdida, intentando reconectar...")
+                            self.disconnect()
+                            self.connect()
+                        else:
+                            logger.info("Watchdog: conexión OK")
+                        self.last_command_time = time.time()
+                    time.sleep(5)  # Verificar cada 5 segundos
+                except Exception as e:
+                    logger.error(f"Error en watchdog: {str(e)}")
+        
+        self.watchdog_thread = threading.Thread(target=watchdog_function, daemon=True)
+        self.watchdog_thread.start()
+        logger.info("Watchdog para conexión Arduino iniciado")
+
+    def _stop_watchdog(self):
+        """Detiene el watchdog de conexión"""
+        self.watchdog_active = False
+        if self.watchdog_thread:
+            self.watchdog_thread = None
+        logger.info("Watchdog para conexión Arduino detenido")
 
     def connect(self, retries=3, delay=0.5):
         # Desconecta primero cualquier conexión previa
@@ -67,6 +108,8 @@ class ArduinoController:
                     if test_result:
                         self.connected = True
                         logger.info(f"✅ Conectado a ESP32 en {self.host}:{self.tcp_port}")
+                        # Iniciar watchdog
+                        self._start_watchdog()
                         return True
                     else:
                         logger.warning("La conexión no respondió a la prueba")
@@ -112,9 +155,12 @@ class ArduinoController:
                     if test_result:
                         self.connected = True
                         logger.info(f"✅ Conectado a Arduino en {self.serial_port}")
+                        # Iniciar watchdog
+                        self._start_watchdog()
                         return True
                     else:
                         logger.warning("La conexión no respondió a la prueba")
+                        self.disconnect()
                         
                 except serial.SerialException as e:
                     with self.lock:
@@ -133,6 +179,7 @@ class ArduinoController:
         return False
 
     def _test_connection(self):
+        """Prueba si la conexión con Arduino está funcionando"""
         try:
             with self.lock:
                 if self.use_tcp:
@@ -188,6 +235,10 @@ class ArduinoController:
             return False
 
     def disconnect(self):
+        """Desconecta del Arduino o ESP32"""
+        # Detener watchdog primero
+        self._stop_watchdog()
+        
         with self.lock:
             if self.use_tcp:
                 if self.socket:
@@ -205,6 +256,7 @@ class ArduinoController:
             logger.info("Dispositivo desconectado")
 
     def is_connected(self):
+        """Verifica si el controlador está conectado"""
         with self.lock:
             if self.use_tcp:
                 connected = self.connected and self.socket is not None
@@ -213,20 +265,26 @@ class ArduinoController:
         return connected
 
     def set_servo(self, servo_id, angle):
+        """Mueve un servo a una posición específica"""
         if not (0 <= angle <= 180):
             return False, "Ángulo fuera de rango (0-180)"
         if servo_id not in self.servo_pins:
             return False, f"ID de servo inválido, debe estar entre {min(self.servo_pins)} y {max(self.servo_pins)}"
 
+        # Si no está conectado, intentar reconexión
+        if not self.is_connected():
+            logger.info("Dispositivo no conectado, intentando reconectar...")
+            if not self.connect():
+                return False, "No se pudo conectar al dispositivo"
+
         command = f"{servo_id},{angle}\n"
         logger.debug(f"Enviando comando: {command}")
         
         with self.lock:
-            if not self.is_connected():
-                if not self.connect():
-                    return False, "Dispositivo no conectado"
-            
             try:
+                # Actualizar tiempo del último comando
+                self.last_command_time = time.time()
+                
                 if self.use_tcp:
                     # Enviar por TCP
                     self.socket.sendall(command.encode())
@@ -257,9 +315,11 @@ class ArduinoController:
                 return True, f"Servo {servo_id} movido a posición {angle}"
             except Exception as e:
                 logger.error(f"Error enviando comando: {str(e)}")
+                self.connected = False  # Marcar como desconectado para reconectar en próximo intento
                 return False, f"Error: {str(e)}"
 
     def reset_servos(self):
+        """Resetea todos los servos a posición 0"""
         success = True
         messages = []
         
@@ -273,27 +333,83 @@ class ArduinoController:
         return success, messages
         
     def get_diagnostics(self):
+        """Obtiene diagnóstico del estado del controlador"""
         diagnostics = {
             "configuracion_actual": {
-                "puerto_configurado": self.port if self.port else "No configurado",
+                "modo_conexion": "TCP/IP" if self.use_tcp else "Serial",
+                "puerto_configurado": self.serial_port if self.serial_port else "No configurado",
+                "host_tcp": self.host if self.host else "No configurado",
+                "puerto_tcp": self.tcp_port if self.use_tcp else "N/A",
                 "baud_rate": self.baud_rate,
-                "estado_conexion": "Conectado" if self.is_connected() else "Desconectado"
+                "estado_conexion": "Conectado" if self.is_connected() else "Desconectado",
+                "watchdog_activo": self.watchdog_active
             },
             "puertos_disponibles": self.get_available_ports(),
-            "info_adicional": {}
+            "info_adicional": {
+                "tiempo_ultimo_comando": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.last_command_time))
+            }
         }
         
         return diagnostics
 
 # Singleton para usar en toda la aplicación
 arduino_controller = None
-def init_arduino(port="COM12", baud_rate=9600):
+
+def init_arduino(serial_port="COM12", baud_rate=9600, use_tcp=False, host=None, tcp_port=8888, connect_now=False):
+    """Inicializa la instancia singleton del controlador Arduino"""
     global arduino_controller
     try:
         if arduino_controller is None:
-            logger.info(f"Inicializando ArduinoController con port={port}, baud_rate={baud_rate}")
-            arduino_controller = ArduinoController(port, baud_rate)
-            # Don't connect at initialization, wait for explicit connect request
+            logger.info(f"Inicializando ArduinoController...")
+            if use_tcp:
+                logger.info(f"Usando TCP con host={host}, port={tcp_port}")
+                arduino_controller = ArduinoController(
+                    host=host, 
+                    port=tcp_port, 
+                    use_tcp=True
+                )
+            else:
+                logger.info(f"Usando puerto serie={serial_port}, baud_rate={baud_rate}")
+                arduino_controller = ArduinoController(
+                    use_tcp=False,
+                    serial_port=serial_port, 
+                    baud_rate=baud_rate
+                )
+            
+            # Connect now if requested
+            if connect_now:
+                arduino_controller.connect()
+        
+        # Actualizar configuración si es necesario
+        elif (use_tcp and not arduino_controller.use_tcp) or \
+             (not use_tcp and arduino_controller.use_tcp) or \
+             (use_tcp and arduino_controller.host != host) or \
+             (use_tcp and arduino_controller.tcp_port != tcp_port) or \
+             (not use_tcp and arduino_controller.serial_port != serial_port) or \
+             (not use_tcp and arduino_controller.baud_rate != baud_rate):
+            
+            # Disconnect first
+            arduino_controller.disconnect()
+            
+            # Update settings
+            arduino_controller.use_tcp = use_tcp
+            if use_tcp:
+                arduino_controller.host = host
+                arduino_controller.tcp_port = tcp_port
+                logger.info(f"Actualizada configuración TCP: host={host}, port={tcp_port}")
+            else:
+                arduino_controller.serial_port = serial_port
+                arduino_controller.baud_rate = baud_rate
+                logger.info(f"Actualizada configuración serie: port={serial_port}, baud_rate={baud_rate}")
+            
+            # Connect with new settings if requested
+            if connect_now:
+                arduino_controller.connect()
+        
+        # Try to connect if requested and not already connected
+        elif connect_now and not arduino_controller.is_connected():
+            arduino_controller.connect()
+            
         return arduino_controller
     except Exception as e:
         logger.error(f"Error al inicializar ArduinoController: {str(e)}")

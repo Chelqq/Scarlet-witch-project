@@ -2,7 +2,11 @@ import cv2
 import mediapipe as mp
 import time
 import threading
+import logging
 from apps.arduino.controller import arduino_controller, init_arduino
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 # Initialize MediaPipe for hand tracking
 mp_hands = mp.solutions.hands
@@ -23,9 +27,37 @@ finger_check_interval = 5  # Check every 5 seconds
 # Lock for thread safety when updating finger status
 status_lock = threading.RLock()
 
-# Ensure Arduino controller is initialized
-if arduino_controller is None:
-    init_arduino()
+# Flag to track if Arduino has been initialized for video processing
+arduino_initialized = False
+
+def initialize_arduino_for_video():
+    """Ensure Arduino controller is properly initialized for video processing"""
+    global arduino_initialized, arduino_controller
+    
+    if arduino_initialized:
+        return True
+        
+    try:
+        # Initialize controller if needed
+        if arduino_controller is None:
+            logger.info("Initializing Arduino controller for video processing")
+            arduino_controller = init_arduino(
+                serial_port="COM12",  # Default port, user can change via UI
+                connect_now=True      # Try to connect right away
+            )
+            
+        # Try to connect if not already connected
+        if arduino_controller and not arduino_controller.is_connected():
+            logger.info("Attempting to connect to Arduino for video processing")
+            arduino_controller.connect()
+        
+        arduino_initialized = True
+        logger.info(f"Arduino initialized for video: connected={arduino_controller.is_connected()}")
+        return arduino_controller.is_connected()
+        
+    except Exception as e:
+        logger.error(f"Error initializing Arduino for video: {str(e)}")
+        return False
 
 def check_fingers_raised(hand_landmarks):
     """Determine which fingers are raised based on hand landmarks"""
@@ -70,13 +102,16 @@ def check_fingers_raised(hand_landmarks):
 
 def control_servos_with_hand(finger_status):
     """Control Arduino servos based on hand finger positions"""
+    global arduino_controller
+    
+    # Only attempt to initialize once
+    if not arduino_initialized:
+        initialize_arduino_for_video()
+    
+    # Skip if no Arduino controller or not connected
     if not arduino_controller or not arduino_controller.is_connected():
-        print("Arduino not connected, attempting to connect...")
-        if arduino_controller:
-            arduino_controller.connect()
-            if not arduino_controller.is_connected():
-                print("Failed to connect to Arduino")
-                return False
+        logger.warning("Arduino not connected for servo control")
+        return False
     
     try:
         # Map fingers to specific servos - adjust servo IDs as needed for your setup
@@ -88,22 +123,32 @@ def control_servos_with_hand(finger_status):
             "pinky": 6     # Servo on pin 6
         }
         
+        results = []
+        
         # Set servo angles based on finger status (0° if down, 180° if up)
         for finger, servo_id in servo_mapping.items():
             angle = 180 if finger_status[finger] else 0
             success, message = arduino_controller.set_servo(servo_id, angle)
+            
             if not success:
-                print(f"Failed to set servo for {finger}: {message}")
+                logger.error(f"Failed to set servo for {finger}: {message}")
+                results.append(False)
+            else:
+                logger.debug(f"Set servo {servo_id} ({finger}) to {angle}°")
+                results.append(True)
         
-        return True
+        return all(results)  # Return True only if all servos were set successfully
     
     except Exception as e:
-        print(f"Error controlling servos: {str(e)}")
+        logger.error(f"Error controlling servos: {str(e)}")
         return False
 
 def process_frame(frame, hands):
     """Process each frame using MediaPipe for hand tracking."""
     global last_check_time, fingers_up
+    
+    if frame is None:
+        return None
     
     # Flip horizontally for a mirror effect
     frame = cv2.flip(frame, 1)
@@ -129,14 +174,14 @@ def process_frame(frame, hands):
             current_time = time.time()
             if current_time - last_check_time >= finger_check_interval:
                 current_fingers = check_fingers_raised(hand_landmarks)
-                print(f"Fingers raised: {', '.join([f for f, up in current_fingers.items() if up])}")
+                logger.info(f"Fingers raised: {', '.join([f for f, up in current_fingers.items() if up])}")
                 
                 # Control Arduino servos based on finger status
                 control_result = control_servos_with_hand(current_fingers)
                 if control_result:
-                    print("Successfully sent servo commands")
+                    logger.info("Successfully sent servo commands")
                 else:
-                    print("Failed to send servo commands")
+                    logger.warning("Failed to send servo commands")
                 
                 last_check_time = current_time
     
@@ -155,32 +200,86 @@ def process_frame(frame, hands):
     cv2.putText(frame, f"Next check in: {time_left:.1f}s", (10, y_pos), 
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
     
+    # Display connection status
+    y_pos += 30
+    if arduino_controller and arduino_controller.is_connected():
+        cv2.putText(frame, "Arduino: Connected", (10, y_pos), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    else:
+        cv2.putText(frame, "Arduino: Disconnected", (10, y_pos), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+    
     return frame
 
 def gen_video_feed(camera_id):
     """Generate video feed with hand tracking for the specified camera."""
-    cap = cv2.VideoCapture(camera_id)
+    # Initialize Arduino connection when video feed starts
+    initialize_arduino_for_video()
     
-    # Create a new instance of MediaPipe Hands for this camera
-    hands = mp_hands.Hands(
-        model_complexity=0,  # 0 for fastest performance, 1 for better accuracy
-        min_detection_confidence=0.7,
-        min_tracking_confidence=0.7,
-        max_num_hands=1
-    )
+    try:
+        cap = cv2.VideoCapture(camera_id)
+        
+        if not cap.isOpened():
+            logger.error(f"Could not open camera {camera_id}")
+            # Generate error frame
+            error_frame = create_error_frame(f"Could not open camera {camera_id}")
+            ret, buffer = cv2.imencode('.jpg', error_frame)
+            error_bytes = buffer.tobytes()
+            
+            while True:
+                yield (b'--frame\r\n'
+                     b'Content-Type: image/jpeg\r\n\r\n' + error_bytes + b'\r\n')
+                time.sleep(1)
+        
+        # Create a new instance of MediaPipe Hands for this camera
+        hands = mp_hands.Hands(
+            model_complexity=0,  # 0 for fastest performance, 1 for better accuracy
+            min_detection_confidence=0.7,
+            min_tracking_confidence=0.7,
+            max_num_hands=1
+        )
+        
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                logger.warning(f"Failed to read frame from camera {camera_id}")
+                break
+            
+            # Process each frame with hand tracking
+            processed_frame = process_frame(frame, hands)
+            
+            if processed_frame is None:
+                continue
+                
+            # Encode the image to JPEG
+            ret, buffer = cv2.imencode('.jpg', processed_frame)
+            frame_bytes = buffer.tobytes()
+            
+            # Return the frame
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
     
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    except Exception as e:
+        logger.error(f"Error in video feed generation: {str(e)}")
+        error_frame = create_error_frame(f"Camera error: {str(e)}")
+        ret, buffer = cv2.imencode('.jpg', error_frame)
+        error_bytes = buffer.tobytes()
         
-        # Process each frame with hand tracking
-        frame = process_frame(frame, hands)
-        
-        # Encode the image to JPEG
-        ret, buffer = cv2.imencode('.jpg', frame)
-        frame = buffer.tobytes()
-        
-        # Return the frame
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        while True:
+            yield (b'--frame\r\n'
+                 b'Content-Type: image/jpeg\r\n\r\n' + error_bytes + b'\r\n')
+            time.sleep(1)
+            
+    finally:
+        if 'cap' in locals() and cap.isOpened():
+            cap.release()
+
+def create_error_frame(message):
+    """Create a frame with error message when camera is not available"""
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.putText(frame, "Camera Error", (200, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+    cv2.putText(frame, message, (100, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+    return frame
+
+# Ensure numpy is imported
+import numpy as np
