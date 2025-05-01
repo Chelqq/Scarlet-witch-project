@@ -5,6 +5,7 @@ from flask_migrate import Migrate
 from flask_minify import Minify
 from sys import exit
 from flask import Response
+import logging
 
 from apps.config import config_dict
 from apps import create_app, db
@@ -47,3 +48,10 @@ def video_feed_1():
 
 if __name__ == "__main__":
     app.run()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
