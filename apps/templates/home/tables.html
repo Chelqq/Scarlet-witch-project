@@ -1,14 +1,702 @@
 {% extends "layouts/base.html" %}
 
-{% block title %} Tables {% endblock %} 
+{% block title %} Secuencias Preestablecidas {% endblock %} 
 
-<!-- Specific Page CSS goes HERE  -->
-{% block stylesheets %}{% endblock stylesheets %}
+{% block stylesheets %}
+<style>
+    .sequence-card {
+        margin-bottom: 1.5rem;
+        transition: all 0.3s;
+    }
+    .sequence-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 20px 0 rgba(0,0,0,.14), 0 7px 10px -5px rgba(156,39,176,.4);
+    }
+    .position-tag {
+        border-radius: 4px;
+        padding: 3px 8px;
+        margin-right: 5px;
+        margin-bottom: 5px;
+        display: inline-block;
+        font-size: 0.8rem;
+    }
+    .edit-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .servo-value {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        padding: 5px;
+        border-radius: 4px;
+        background-color: rgba(0,0,0,0.05);
+    }
+    .sequence-preview {
+        max-height: 250px;
+        overflow-y: auto;
+        margin-bottom: 15px;
+    }
+    /* Estilos para el modal */
+    .modal-body {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    .delay-input {
+        width: 80px;
+        display: inline-block;
+    }
+    .loading-spinner {
+        margin: 0 auto;
+        display: block;
+    }
+    /* Estilos para el área de creación de secuencia */
+    .sequence-step {
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        margin-bottom: 10px;
+        padding: 10px;
+        position: relative;
+    }
+    .delete-step {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        cursor: pointer;
+        color: #ff0000;
+    }
+</style>
+{% endblock stylesheets %}
 
 {% block content %}
+<div class="content">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="title">Secuencias de Movimiento Predefinidas</h5>
+                    <p class="category">Guarda, edita y ejecuta secuencias de movimientos para tus servos</p>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Puerto Arduino</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="arduino-port" placeholder="COM12">
+                                    <div class="input-group-append">
+                                        <button class="btn btn-primary" id="connect-button">Conectar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="connection-status mt-4">
+                                Estado: <span id="connection-status" class="badge badge-secondary">Desconocido</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <button id="create-sequence" class="btn btn-success">Crear Nueva Secuencia</button>
+                        </div>
+                    </div>
+                    
+                    <div class="row" id="sequences-container">
+                        <!-- Aquí se cargarán dinámicamente las secuencias guardadas -->
+                        <div class="col-12 text-center" id="loading-area">
+                            <div class="spinner-border text-primary loading-spinner" role="status">
+                                <span class="sr-only">Cargando...</span>
+                            </div>
+                            <p>Cargando secuencias guardadas...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
+<!-- Modal para editar/crear secuencia -->
+<div class="modal fade" id="sequenceModal" tabindex="-1" role="dialog" aria-labelledby="sequenceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sequenceModalLabel">Editar Secuencia</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="sequence-form">
+                    <input type="hidden" id="sequence-id" value="">
+                    <div class="form-group">
+                        <label for="sequence-name">Nombre de la Secuencia:</label>
+                        <input type="text" class="form-control" id="sequence-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sequence-description">Descripción:</label>
+                        <textarea class="form-control" id="sequence-description" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Pasos de la Secuencia:</label>
+                        <div id="steps-container">
+                            <!-- Aquí se generarán dinámicamente los pasos -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-info mt-2" id="add-step">Añadir Paso</button>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Configuración General:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="loop-sequence">
+                            <label class="form-check-label" for="loop-sequence">
+                                Repetir secuencia (modo bucle)
+                            </label>
+                        </div>
+                        <div class="form-group mt-2">
+                            <label for="default-delay">Retardo entre pasos (ms):</label>
+                            <input type="number" class="form-control delay-input" id="default-delay" value="100" min="0" max="5000">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="save-sequence">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
 
+<!-- Modal de confirmación para eliminar secuencia -->
+<div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirmar Eliminación</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                ¿Estás seguro de que deseas eliminar esta secuencia? Esta acción no se puede deshacer.
+                <input type="hidden" id="delete-sequence-id">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete">Eliminar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock content %}
 
-<!-- Specific Page JS goes HERE  -->
-{% block javascripts %}{% endblock javascripts %}
+{% block javascripts %}
+<script>
+    $(document).ready(function() {
+        // Variable global para almacenar las secuencias cargadas
+        let loadedSequences = [];
+        
+        // Verificar estado de conexión al cargar
+        checkConnectionStatus();
+        
+        // Cargar secuencias guardadas
+        loadSavedSequences();
+        
+        // Manejar conexión con Arduino
+        $('#connect-button').on('click', function() {
+            const port = $('#arduino-port').val();
+            connectToArduino(port);
+        });
+        
+        // Abrir modal para crear nueva secuencia
+        $('#create-sequence').on('click', function() {
+            resetSequenceModal();
+            $('#sequenceModalLabel').text('Crear Nueva Secuencia');
+            $('#sequenceModal').modal('show');
+        });
+        
+        // Añadir paso a la secuencia
+        $('#add-step').on('click', function() {
+            addSequenceStep();
+        });
+        
+        // Guardar secuencia
+        $('#save-sequence').on('click', function() {
+            saveSequence();
+        });
+        
+        // Confirmar eliminación de secuencia
+        $('#confirm-delete').on('click', function() {
+            const sequenceId = $('#delete-sequence-id').val();
+            deleteSequence(sequenceId);
+        });
+        
+        // Funciones
+        function checkConnectionStatus() {
+            $.ajax({
+                url: '/arduino/status',
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'connected') {
+                        $('#connection-status').removeClass('badge-secondary badge-danger').addClass('badge-success').text('Conectado');
+                        $('#arduino-port').val(response.port || "COM12");
+                    } else {
+                        $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Desconectado');
+                    }
+                },
+                error: function() {
+                    $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
+                }
+            });
+        }
+        
+        function connectToArduino(port) {
+            $.ajax({
+                url: '/arduino/connect',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ 
+                    use_tcp: false,
+                    serial_port: port 
+                }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        $('#connection-status').removeClass('badge-secondary badge-danger').addClass('badge-success').text('Conectado');
+                        showNotification('success', response.message);
+                    } else {
+                        $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
+                        showNotification('danger', response.message);
+                    }
+                },
+                error: function(xhr) {
+                    $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
+                    showNotification('danger', xhr.responseJSON?.message || 'Error al conectar');
+                }
+            });
+        }
+        
+        function loadSavedSequences() {
+            $('#loading-area').show();
+            
+            $.ajax({
+                url: '/arduino/sequences',
+                method: 'GET',
+                success: function(response) {
+                    $('#loading-area').hide();
+                    
+                    if (response.status === 'success') {
+                        loadedSequences = response.sequences || [];
+                        renderSequences(loadedSequences);
+                    } else {
+                        showNotification('danger', response.message || 'Error al cargar secuencias');
+                    }
+                },
+                error: function(xhr) {
+                    $('#loading-area').hide();
+                    showNotification('danger', xhr.responseJSON?.message || 'Error al cargar secuencias');
+                    renderSequences([]);
+                }
+            });
+        }
+        
+        function renderSequences(sequences) {
+            const container = $('#sequences-container');
+            
+            if (sequences.length === 0) {
+                container.html('<div class="col-12"><div class="alert alert-info">No hay secuencias guardadas. Crea una nueva secuencia para comenzar.</div></div>');
+                return;
+            }
+            
+            container.empty();
+            
+            sequences.forEach(function(sequence) {
+                const previewHtml = generatePreviewHtml(sequence);
+                
+                const card = `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card sequence-card" data-sequence-id="${sequence.id}">
+                            <div class="card-header">
+                                <h6 class="card-title">${sequence.name}</h6>
+                                <p class="card-category">${sequence.description || 'Sin descripción'}</p>
+                            </div>
+                            <div class="card-body">
+                                <div class="sequence-preview">
+                                    ${previewHtml}
+                                </div>
+                                <div class="edit-controls">
+                                    <div>
+                                        <button class="btn btn-sm btn-primary execute-sequence" data-sequence-id="${sequence.id}">
+                                            Ejecutar
+                                        </button>
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-sm btn-info edit-sequence" data-sequence-id="${sequence.id}">
+                                            <i class="tim-icons icon-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger delete-sequence" data-sequence-id="${sequence.id}">
+                                            <i class="tim-icons icon-simple-remove"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.append(card);
+            });
+            
+            // Añadir event listeners
+            $('.execute-sequence').on('click', function() {
+                const sequenceId = $(this).data('sequence-id');
+                const sequence = sequences.find(s => s.id === sequenceId);
+                executeSequence(sequence);
+            });
+            
+            $('.edit-sequence').on('click', function() {
+                const sequenceId = $(this).data('sequence-id');
+                const sequence = sequences.find(s => s.id === sequenceId);
+                openEditModal(sequence);
+            });
+            
+            $('.delete-sequence').on('click', function() {
+                const sequenceId = $(this).data('sequence-id');
+                $('#delete-sequence-id').val(sequenceId);
+                $('#deleteModal').modal('show');
+            });
+        }
+        
+        function generatePreviewHtml(sequence) {
+            let html = '';
+            
+            // Agrupar por paso para visualización más clara
+            const groupedSteps = [];
+            let currentGroup = [];
+            
+            sequence.steps.forEach((step, index) => {
+                currentGroup.push(step);
+                
+                // Cada 5 pasos o al final, crear un grupo
+                if ((index + 1) % 5 === 0 || index === sequence.steps.length - 1) {
+                    groupedSteps.push([...currentGroup]);
+                    currentGroup = [];
+                }
+            });
+            
+            groupedSteps.forEach((group, groupIndex) => {
+                html += `<div class="step-group">Paso ${groupIndex + 1}:`;
+                
+                group.forEach(step => {
+                    const colorClass = step.angle > 90 ? 'info' : (step.angle < 90 ? 'warning' : 'success');
+                    html += `
+                        <span class="position-tag badge-${colorClass}">
+                            S${step.servo_id}: ${step.angle}°
+                        </span>
+                    `;
+                });
+                
+                html += '</div>';
+            });
+            
+            if (sequence.loop) {
+                html += '<div class="mt-2"><span class="badge badge-info">Modo bucle activado</span></div>';
+            }
+            
+            return html;
+        }
+        
+        function resetSequenceModal() {
+            $('#sequence-id').val('');
+            $('#sequence-name').val('');
+            $('#sequence-description').val('');
+            $('#steps-container').empty();
+            $('#loop-sequence').prop('checked', false);
+            $('#default-delay').val(100);
+            
+            // Añadir al menos un paso inicial
+            addSequenceStep();
+        }
+        
+        function addSequenceStep() {
+            const stepIndex = $('#steps-container .sequence-step').length;
+            const stepHtml = `
+                <div class="sequence-step" data-step="${stepIndex}">
+                    <span class="delete-step">&times;</span>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Servo ID:</label>
+                                <select class="form-control step-servo-id">
+                                    ${generateServoOptions()}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Ángulo (0-180):</label>
+                                <input type="number" class="form-control step-angle" value="90" min="0" max="180">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Retardo (ms):</label>
+                                <input type="number" class="form-control step-delay" value="100" min="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            $('#steps-container').append(stepHtml);
+            
+            // Añadir evento para eliminar paso
+            $('.delete-step').off('click').on('click', function() {
+                $(this).closest('.sequence-step').remove();
+            });
+        }
+        
+        function generateServoOptions() {
+            let options = '';
+            for (let i = 2; i <= 31; i++) {
+                options += `<option value="${i}">${i}</option>`;
+            }
+            return options;
+        }
+        
+        function openEditModal(sequence) {
+            resetSequenceModal();
+            
+            $('#sequenceModalLabel').text('Editar Secuencia');
+            $('#sequence-id').val(sequence.id);
+            $('#sequence-name').val(sequence.name);
+            $('#sequence-description').val(sequence.description || '');
+            $('#loop-sequence').prop('checked', sequence.loop || false);
+            $('#default-delay').val(sequence.defaultDelay || 100);
+            
+            // Eliminar el paso inicial
+            $('#steps-container').empty();
+            
+            // Añadir cada paso de la secuencia
+            sequence.steps.forEach(function(step) {
+                addSequenceStep();
+                const $lastStep = $('#steps-container .sequence-step:last-child');
+                $lastStep.find('.step-servo-id').val(step.servo_id);
+                $lastStep.find('.step-angle').val(step.angle);
+                $lastStep.find('.step-delay').val(step.delay || 100);
+            });
+            
+            $('#sequenceModal').modal('show');
+        }
+        
+        function saveSequence() {
+            // Validar formulario
+            if (!$('#sequence-name').val().trim()) {
+                showNotification('warning', 'Por favor, introduce un nombre para la secuencia');
+                return;
+            }
+            if ($('#steps-container .sequence-step').length === 0) {
+                showNotification('warning', 'La secuencia debe tener al menos un paso');
+                return;
+            }
+            
+            // Recopilar datos de la secuencia
+            const sequenceId = $('#sequence-id').val() || 'seq_' + Date.now();
+            const sequence = {
+                id: sequenceId,
+                name: $('#sequence-name').val().trim(),
+                description: $('#sequence-description').val().trim(),
+                loop: $('#loop-sequence').is(':checked'),
+                defaultDelay: parseInt($('#default-delay').val()) || 100,
+                steps: []
+            };
+            
+            // Recopilar pasos
+            $('#steps-container .sequence-step').each(function() {
+                const $step = $(this);
+                const step = {
+                    servo_id: parseInt($step.find('.step-servo-id').val()),
+                    angle: parseInt($step.find('.step-angle').val()),
+                    delay: parseInt($step.find('.step-delay').val()) || 100
+                };
+                sequence.steps.push(step);
+            });
+            
+            // Enviar petición al backend
+            $.ajax({
+                url: '/arduino/sequences',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(sequence),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        $('#sequenceModal').modal('hide');
+                        showNotification('success', response.message || 'Secuencia guardada correctamente');
+                        loadSavedSequences();
+                    } else {
+                        showNotification('danger', response.message || 'Error al guardar secuencia');
+                    }
+                },
+                error: function(xhr) {
+                    showNotification('danger', xhr.responseJSON?.message || 'Error al guardar secuencia');
+                }
+            });
+        }
+        
+        function deleteSequence(sequenceId) {
+            $.ajax({
+                url: `/arduino/sequences/${sequenceId}`,
+                method: 'DELETE',
+                success: function(response) {
+                    $('#deleteModal').modal('hide');
+                    
+                    if (response.status === 'success') {
+                        showNotification('success', response.message || 'Secuencia eliminada correctamente');
+                        loadSavedSequences();
+                    } else {
+                        showNotification('danger', response.message || 'Error al eliminar secuencia');
+                    }
+                },
+                error: function(xhr) {
+                    $('#deleteModal').modal('hide');
+                    showNotification('danger', xhr.responseJSON?.message || 'Error al eliminar secuencia');
+                }
+            });
+        }
+        
+        function executeSequence(sequence) {
+            if (!sequence || !sequence.steps || sequence.steps.length === 0) {
+                showNotification('warning', 'La secuencia está vacía');
+                return;
+            }
+            
+            // Comprobar si el Arduino está conectado
+            if ($('#connection-status').text() !== 'Conectado') {
+                showNotification('warning', 'Arduino no está conectado. Conecta primero.');
+                return;
+            }
+            
+            // Mostrar notificación de inicio
+            showNotification('info', `Ejecutando secuencia: ${sequence.name}`);
+            
+            // Enviar la secuencia completa al backend para ejecución
+            $.ajax({
+                url: '/arduino/run_sequence',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ sequence: sequence }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        showNotification('success', 'Secuencia completada correctamente');
+                    } else {
+                        showNotification('danger', response.message || 'Error al ejecutar secuencia');
+                    }
+                },
+                error: function(xhr) {
+                    showNotification('danger', xhr.responseJSON?.message || 'Error al ejecutar secuencia');
+                }
+            });
+        }
+        
+        // Implementación alternativa para ejecutar la secuencia en el frontend
+        function executeSequenceClient(sequence) {
+            if (!sequence || !sequence.steps || sequence.steps.length === 0) {
+                showNotification('warning', 'La secuencia está vacía');
+                return;
+            }
+            
+            // Comprobar si el Arduino está conectado
+            if ($('#connection-status').text() !== 'Conectado') {
+                showNotification('warning', 'Arduino no está conectado. Conecta primero.');
+                return;
+            }
+            
+            // Mostrar notificación de inicio
+            showNotification('info', `Ejecutando secuencia: ${sequence.name}`);
+            
+            // Ejecutar secuencia paso a paso
+            let stepIndex = 0;
+            let isRunning = true;
+            
+            function executeStep() {
+                if (!isRunning) return;
+                
+                if (stepIndex >= sequence.steps.length) {
+                    if (sequence.loop) {
+                        // Reiniciar la secuencia si está en modo bucle
+                        stepIndex = 0;
+                        setTimeout(executeStep, 500); // Pequeña pausa antes de reiniciar el bucle
+                    } else {
+                        showNotification('success', 'Secuencia completada');
+                    }
+                    return;
+                }
+                
+                const step = sequence.steps[stepIndex];
+                
+                // Enviar comando al Arduino
+                $.ajax({
+                    url: '/arduino/set_servo',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        servo_id: step.servo_id,
+                        angle: step.angle
+                    }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Pasar al siguiente paso después del retardo especificado
+                            stepIndex++;
+                            setTimeout(executeStep, step.delay || sequence.defaultDelay || 100);
+                        } else {
+                            isRunning = false;
+                            showNotification('danger', `Error en paso ${stepIndex+1}: ${response.message}`);
+                        }
+                    },
+                    error: function(xhr) {
+                        isRunning = false;
+                        showNotification('danger', `Error en paso ${stepIndex+1}: ${xhr.responseJSON?.message || 'Error de comunicación'}`);
+                    }
+                });
+            }
+            
+            // Botón para detener la ejecución
+            $('<button>')
+                .addClass('btn btn-sm btn-danger stop-sequence')
+                .text('Detener')
+                .on('click', function() {
+                    isRunning = false;
+                    showNotification('warning', 'Ejecución de secuencia detenida');
+                    $(this).remove();
+                })
+                .appendTo('body')
+                .css({
+                    position: 'fixed',
+                    bottom: '20px',
+                    right: '20px',
+                    zIndex: 9999
+                });
+            
+            // Iniciar la ejecución de la secuencia
+            executeStep();
+        }
+        
+        function showNotification(type, message) {
+            $.notify({
+                icon: type === 'success' ? 'tim-icons icon-check-2' : 'tim-icons icon-alert-circle-exc',
+                message: message
+            }, {
+                type: type,
+                timer: 4000,
+                placement: {
+                    from: 'top',
+                    align: 'right'
+                }
+            });
+        }
+    });
+</script>
+{% endblock javascripts %}

@@ -3,12 +3,28 @@
 from apps.arduino import blueprint
 from flask import request, jsonify
 from flask_login import login_required
-from apps.arduino.controller import arduino_controller, init_arduino, ArduinoController
+from apps.arduino.controller import arduino_controller, init_arduino
 from flask import current_app as app
 import time
 import logging
+import os
+import json
 
+# Configurar logger
 logger = logging.getLogger(__name__)
+
+# Aplicar mejoras de concurrencia
+try:
+    from apps.arduino import apply_improvements
+    apply_improvements()
+except Exception as e:
+    logger.error(f"No se pudieron aplicar mejoras de concurrencia: {str(e)}")
+
+# Directorio para almacenar las secuencias guardadas
+SEQUENCES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'sequences')
+
+# Asegurar que el directorio existe
+os.makedirs(SEQUENCES_DIR, exist_ok=True)
 
 @blueprint.route('/status')
 @login_required
@@ -310,3 +326,223 @@ def diagnostics():
     diagnostics['pyserial_version'] = serial.__version__
     
     return jsonify(diagnostics)
+
+# Rutas para secuencias
+@blueprint.route('/sequences', methods=['GET'])
+@login_required
+def get_sequences():
+    """Obtiene todas las secuencias guardadas"""
+    try:
+        sequences = []
+        
+        # Leer todos los archivos JSON en el directorio de secuencias
+        for filename in os.listdir(SEQUENCES_DIR):
+            if filename.endswith('.json'):
+                file_path = os.path.join(SEQUENCES_DIR, filename)
+                with open(file_path, 'r') as f:
+                    sequence = json.load(f)
+                    sequences.append(sequence)
+        
+        return jsonify({
+            'status': 'success',
+            'sequences': sequences
+        })
+    
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'message': f'Error al obtener secuencias: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+@blueprint.route('/sequences/<sequence_id>', methods=['GET'])
+@login_required
+def get_sequence(sequence_id):
+    """Obtiene una secuencia específica por ID"""
+    try:
+        file_path = os.path.join(SEQUENCES_DIR, f"{sequence_id}.json")
+        
+        if not os.path.exists(file_path):
+            return jsonify({
+                'status': 'error',
+                'message': f'Secuencia con ID {sequence_id} no encontrada'
+            }), 404
+        
+        with open(file_path, 'r') as f:
+            sequence = json.load(f)
+        
+        return jsonify({
+            'status': 'success',
+            'sequence': sequence
+        })
+    
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'message': f'Error al obtener secuencia: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+@blueprint.route('/sequences', methods=['POST'])
+@login_required
+def save_sequence():
+    """Guarda una nueva secuencia o actualiza una existente"""
+    try:
+        sequence = request.json
+        
+        # Validar datos mínimos
+        if not sequence.get('name'):
+            return jsonify({
+                'status': 'error',
+                'message': 'El nombre de la secuencia es obligatorio'
+            }), 400
+        
+        if not sequence.get('steps') or not isinstance(sequence['steps'], list) or len(sequence['steps']) == 0:
+            return jsonify({
+                'status': 'error',
+                'message': 'La secuencia debe tener al menos un paso'
+            }), 400
+        
+        # Generar ID si es una nueva secuencia
+        if not sequence.get('id'):
+            sequence['id'] = f"seq_{int(time.time())}"
+        
+        # Guardar la secuencia en un archivo JSON
+        file_path = os.path.join(SEQUENCES_DIR, f"{sequence['id']}.json")
+        
+        with open(file_path, 'w') as f:
+            json.dump(sequence, f, indent=2)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Secuencia guardada correctamente',
+            'sequence_id': sequence['id']
+        })
+    
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'message': f'Error al guardar secuencia: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+@blueprint.route('/sequences/<sequence_id>', methods=['DELETE'])
+@login_required
+def delete_sequence(sequence_id):
+    """Elimina una secuencia existente"""
+    try:
+        file_path = os.path.join(SEQUENCES_DIR, f"{sequence_id}.json")
+        
+        if not os.path.exists(file_path):
+            return jsonify({
+                'status': 'error',
+                'message': f'Secuencia con ID {sequence_id} no encontrada'
+            }), 404
+        
+        # Eliminar el archivo
+        os.remove(file_path)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Secuencia eliminada correctamente'
+        })
+    
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'message': f'Error al eliminar secuencia: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+@blueprint.route('/run_sequence', methods=['POST'])
+@login_required
+def run_sequence():
+    """Ejecuta una secuencia de comandos para servos"""
+    global arduino_controller
+    
+    try:
+        if arduino_controller is None:
+            init_arduino()
+            
+        if arduino_controller is None:
+            return jsonify({
+                'status': 'error',
+                'message': 'Arduino controller not initialized'
+            }), 500
+        
+        # Obtener datos de la secuencia
+        data = request.json
+        sequence = data.get('sequence')
+        
+        if not sequence or 'steps' not in sequence or not sequence['steps']:
+            return jsonify({
+                'status': 'error',
+                'message': 'Secuencia inválida o vacía'
+            }), 400
+        
+        # Verificar si Arduino está conectado
+        if not arduino_controller.is_connected():
+            if not arduino_controller.connect():
+                return jsonify({
+                    'status': 'error',
+                    'message': 'No se pudo conectar con Arduino'
+                }), 500
+        
+        # Formatear comandos para Arduino
+        commands = []
+        for step in sequence['steps']:
+            servo_id = step.get('servo_id')
+            angle = step.get('angle')
+            
+            if servo_id is None or angle is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Paso inválido: falta servo_id o angle'
+                }), 400
+            
+            commands.append({
+                'servo_id': servo_id,
+                'angle': angle,
+                'delay': step.get('delay', sequence.get('defaultDelay', 100)) / 1000.0  # Convertir ms a segundos
+            })
+        
+        # Ejecutar la secuencia (si run_sequence está disponible)
+        if hasattr(arduino_controller, 'run_sequence'):
+            success, messages = arduino_controller.run_sequence(commands)
+        else:
+            # Fallback si run_sequence no está disponible
+            success = True
+            messages = []
+            
+            for cmd in commands:
+                result, message = arduino_controller.set_servo(cmd['servo_id'], cmd['angle'])
+                if not result:
+                    success = False
+                    messages.append(message)
+                time.sleep(cmd['delay'])
+        
+        if success:
+            return jsonify({
+                'status': 'success',
+                'message': 'Secuencia ejecutada correctamente'
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Error al ejecutar la secuencia',
+                'details': messages
+            }), 500
+            
+    except Exception as e:
+        import traceback
+        current_app.logger.error(f"Error in run_sequence: {str(e)}")
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Exception: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
