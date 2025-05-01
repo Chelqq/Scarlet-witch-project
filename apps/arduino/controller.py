@@ -5,6 +5,7 @@ import time
 import threading
 import logging
 import serial.tools.list_ports
+from apps.arduino.controller import ArduinoController
 
 logger = logging.getLogger(__name__)
 
@@ -265,7 +266,7 @@ class ArduinoController:
         return connected
 
     def set_servo(self, servo_id, angle):
-        """Mueve un servo a una posición específica"""
+        """Mueve un servo a una posición específica con manejo mejorado de concurrencia"""
         if not (0 <= angle <= 180):
             return False, "Ángulo fuera de rango (0-180)"
         if servo_id not in self.servo_pins:
@@ -273,32 +274,47 @@ class ArduinoController:
 
         # Si no está conectado, intentar reconexión
         if not self.is_connected():
-            logger.info("Dispositivo no conectado, intentando reconectar...")
+            logging.info("Dispositivo no conectado, intentando reconectar...")
             if not self.connect():
                 return False, "No se pudo conectar al dispositivo"
 
         command = f"{servo_id},{angle}\n"
-        logger.debug(f"Enviando comando: {command}")
+        logging.debug(f"Enviando comando: {command}")
         
-        with self.lock:
-            try:
-                # Actualizar tiempo del último comando
-                self.last_command_time = time.time()
-                
-                if self.use_tcp:
-                    # Enviar por TCP
+        # Timeout para adquirir el lock (evita bloqueos indefinidos)
+        lock_acquired = self.lock.acquire(timeout=1.0)
+        if not lock_acquired:
+            logging.warning(f"No se pudo adquirir el lock para el servo {servo_id} después de 1 segundo")
+            return False, "Sistema ocupado, intente nuevamente"
+        
+        try:
+            # Actualizar tiempo del último comando
+            self.last_command_time = time.time()
+            
+            if self.use_tcp:
+                # Enviar por TCP con timeout
+                try:
+                    self.socket.settimeout(0.7)  # 700ms timeout
                     self.socket.sendall(command.encode())
                     
                     # Non-blocking response check with timeout
-                    self.socket.settimeout(0.5)  # 500ms timeout
                     try:
                         response = self.socket.recv(1024).decode().strip()
-                        logger.debug(f"Respuesta del ESP32: {response}")
-                    except socket.timeout:
-                        logger.debug("No se recibió respuesta del ESP32 (timeout)")
+                        logging.debug(f"Respuesta del ESP32: {response}")
+                    except Exception as e:
+                        logging.debug(f"No se recibió respuesta del ESP32: {str(e)}")
                         
-                else:
-                    # Enviar por serie
+                except Exception as e:
+                    logging.error(f"Error enviando comando TCP: {str(e)}")
+                    self.connected = False
+                    return False, f"Error de comunicación TCP: {str(e)}"
+                    
+            else:
+                # Enviar por serie con mejor manejo de excepciones
+                try:
+                    if not self.arduino or not self.arduino.is_open:
+                        return False, "Puerto serial no disponible"
+                        
                     self.arduino.reset_input_buffer()
                     self.arduino.write(command.encode())
                     
@@ -310,13 +326,18 @@ class ArduinoController:
                         if self.arduino.in_waiting > 0:
                             response = self.arduino.readline().decode().strip()
                             break
-                        time.sleep(0.05)
+                        time.sleep(0.01)  # Más pequeño para ser más reactivo
                 
-                return True, f"Servo {servo_id} movido a posición {angle}"
-            except Exception as e:
-                logger.error(f"Error enviando comando: {str(e)}")
-                self.connected = False  # Marcar como desconectado para reconectar en próximo intento
-                return False, f"Error: {str(e)}"
+                except Exception as e:
+                    logging.error(f"Error enviando comando serial: {str(e)}")
+                    self.connected = False
+                    return False, f"Error de comunicación serial: {str(e)}"
+            
+            return True, f"Servo {servo_id} movido a posición {angle}"
+            
+        finally:
+            # Asegurar que siempre se libere el lock
+            self.lock.release()
 
     def reset_servos(self):
         """Resetea todos los servos a posición 0"""
@@ -330,6 +351,110 @@ class ArduinoController:
             messages.append(message)
             time.sleep(0.05)  # Small delay between commands
             
+        return success, messages
+
+    # Para ejecutar secuencias completas
+    def run_sequence(self, commands):
+        """Ejecuta una secuencia de comandos para servos con manejo de errores y concurrencia
+        
+        Args:
+            commands: Lista de diccionarios con pares servo_id y angle [{servo_id: 2, angle: 90, delay: 0.1}, ...]
+            
+        Returns:
+            (success, messages): Tupla con éxito global y mensajes individuales
+        """
+        success = True
+        messages = []
+        
+        # Indicar ejecución de secuencia
+        logging.info(f"Iniciando ejecución de secuencia con {len(commands)} pasos")
+        
+        # Verificar y normalizar comandos
+        valid_commands = []
+        for i, cmd in enumerate(commands):
+            if 'servo_id' not in cmd or 'angle' not in cmd:
+                messages.append(f"Paso {i+1}: comando inválido - falta servo_id o angle")
+                success = False
+                continue
+                
+            # Validar valores
+            servo_id = cmd['servo_id']
+            angle = cmd['angle']
+            delay = cmd.get('delay', 0.1)
+            
+            if not isinstance(servo_id, int) or not isinstance(angle, int):
+                messages.append(f"Paso {i+1}: valores no numéricos")
+                success = False
+                continue
+                
+            if servo_id not in self.servo_pins:
+                messages.append(f"Paso {i+1}: ID de servo inválido ({servo_id})")
+                success = False
+                continue
+                
+            if not (0 <= angle <= 180):
+                messages.append(f"Paso {i+1}: ángulo fuera de rango ({angle})")
+                success = False
+                continue
+                
+            valid_commands.append({'servo_id': servo_id, 'angle': angle, 'delay': delay})
+        
+        # Si hay errores de validación, no ejecutar la secuencia
+        if not success:
+            return False, messages
+        
+        # Ejecutar secuencia comando por comando
+        for i, cmd in enumerate(valid_commands):
+            servo_id = cmd['servo_id']
+            angle = cmd['angle']
+            delay = cmd['delay']
+            
+            # Usar el método set_servo mejorado que ya maneja los locks
+            result, message = self.set_servo(servo_id, angle)
+            
+            if not result:
+                success = False
+                messages.append(f"Paso {i+1}: Error - {message}")
+            else:
+                messages.append(f"Paso {i+1}: {message}")
+            
+            # Aplicar delay entre comandos
+            if i < len(valid_commands) - 1:  # No esperar después del último comando
+                time.sleep(delay)
+        
+        logging.info(f"Secuencia completada. Éxito: {success}")
+        return success, messages
+
+        """Ejecuta una secuencia de comandos para servos con manejo de errores
+        
+        Args:
+            commands: Lista de diccionarios con pares servo_id y angle [{servo_id: 2, angle: 90}, ...]
+            
+        Returns:
+            (success, messages): Tupla con éxito global y mensajes individuales
+        """
+        success = True
+        messages = []
+        
+        for cmd in commands:
+            servo_id = cmd.get('servo_id')
+            angle = cmd.get('angle')
+            delay = cmd.get('delay', 0.05)  # Delay entre comandos
+            
+            if servo_id is None or angle is None:
+                success = False
+                messages.append("Comando inválido: falta servo_id o angle")
+                continue
+                
+            result, message = self.set_servo(servo_id, angle)
+            if not result:
+                success = False
+            messages.append(message)
+            
+            # Pequeño delay entre comandos para no saturar Arduino
+            if delay > 0:
+                time.sleep(delay)
+                
         return success, messages
         
     def get_diagnostics(self):
@@ -351,6 +476,21 @@ class ArduinoController:
         }
         
         return diagnostics
+
+    # Método para instalación en la clase ArduinoController
+    def patch_arduino_controller():
+        """Aplica los parches a la clase ArduinoController para mejorar el manejo de concurrencia"""
+        
+        # Reemplazar el método set_servo con nuestra versión mejorada
+        ArduinoController.set_servo = set_servo
+        
+        # Añadir el nuevo método run_sequence
+        ArduinoController.run_sequence = run_sequence
+        
+        logging.info("Se han aplicado las mejoras de concurrencia a ArduinoController")
+        
+    # Aplica los parches cuando se importa este módulo
+    patch_arduino_controller()
 
 # Singleton para usar en toda la aplicación
 arduino_controller = None
