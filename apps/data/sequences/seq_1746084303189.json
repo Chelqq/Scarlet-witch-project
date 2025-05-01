@@ -1,7 +1,7 @@
 {
   "id": "seq_1746084303189",
-  "name": "Saludoasdsdasdad",
-  "description": "dsfs",
+  "name": "Routine 1",
+  "description": "test1",
   "loop": false,
   "defaultDelay": 100,
   "steps": [
