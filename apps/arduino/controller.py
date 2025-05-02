@@ -10,7 +10,7 @@ import serial.tools.list_ports
 logger = logging.getLogger(__name__)
 
 class ArduinoController:
-    def __init__(self, host=None, port=8888, use_tcp=False, serial_port=None, baud_rate=9600):
+    def __init__(self, host=None, port=8888, use_tcp=False, serial_port=None, baud_rate=115200):
         self.use_tcp = use_tcp
         
         # Configuración TCP/IP para ESP32

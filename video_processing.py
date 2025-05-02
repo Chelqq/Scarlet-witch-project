@@ -40,10 +40,21 @@ def initialize_arduino_for_video():
     try:
         # Initialize controller if needed
         if arduino_controller is None:
-            logger.info("Initializing Arduino controller for video processing")
+            # Autodetectar puerto disponible
+            from serial.tools.list_ports import comports
+            available_ports = [p.device for p in comports()]
+            
+            if not available_ports:
+                logger.error("No se encontraron puertos seriales disponibles")
+                return False
+            
+            # Usar el primer puerto disponible
+            port_to_use = available_ports[0]
+            logger.info(f"Usando puerto serial detectado automáticamente: {port_to_use}")
+            
             arduino_controller = init_arduino(
-                serial_port="COM12",  # Default port, user can change via UI
-                connect_now=True      # Try to connect right away
+                serial_port=port_to_use,
+                connect_now=True
             )
             
         # Try to connect if not already connected
