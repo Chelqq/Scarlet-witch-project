@@ -85,8 +85,8 @@ def debug_info():
     try:
         from apps.arduino.controller import arduino_controller, init_arduino
         
-        if arduino_controller is None:
-            init_arduino()
+        #if arduino_controller is None:
+        #    init_arduino()
             
         if arduino_controller is None:
             return jsonify({

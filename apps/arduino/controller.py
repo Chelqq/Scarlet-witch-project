@@ -201,36 +201,17 @@ class ArduinoController:
                     test_cmd = "2,90\n"
                     self.socket.sendall(test_cmd.encode())
                     
-                    # Intentar leer respuesta
-                    self.socket.settimeout(2.0)
+                    # Aumentar el timeout a 5 segundos (originalmente 2.0)
+                    self.socket.settimeout(10.0)
                     try:
                         response = self.socket.recv(1024).decode().strip()
+                        # Acepta cualquier respuesta en lugar de validarla específicamente
                         logger.info(f"ESP32 respondió: {response}")
-                        return True
+                        return True if response else False
                     except socket.timeout:
                         logger.warning("ESP32 no respondió a la prueba en el tiempo esperado")
                         return False
-                else:
-                    if not self.arduino or not self.arduino.is_open:
-                        return False
                     
-                    self.arduino.reset_input_buffer()
-                    self.arduino.reset_output_buffer()
-                    
-                    test_cmd = "2,90\n"
-                    self.arduino.write(test_cmd.encode())
-                    
-                    start_time = time.time()
-                    while (time.time() - start_time) < 2.0:
-                        if self.arduino.in_waiting > 0:
-                            response = self.arduino.readline().decode().strip()
-                            logger.info(f"Arduino respondió: {response}")
-                            return True
-                        time.sleep(0.1)
-                        
-                    logger.warning("Arduino no respondió a la prueba en el tiempo esperado")
-                    return False
-                
         except Exception as e:
             logger.error(f"Error durante prueba de conexión: {str(e)}")
             return False
