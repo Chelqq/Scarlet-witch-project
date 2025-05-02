@@ -74,31 +74,31 @@
                                             </label>
                                         </div>
                                         
-                                        <!-- Conexión directa Arduino -->
-                                        <div id="direct-connection-form" class="connection-form">
-                                            <div class="form-group">
-                                                <label>Puerto Arduino</label>
-                                                <div class="input-group">
-                                                    <input type="text" class="form-control" id="arduino-port" placeholder="COM12">
-                                                    <div class="input-group-append">
-                                                        <button class="btn btn-primary" id="connect-direct-button">Conectar</button>
+                                            <!-- Conexión directa Arduino -->
+                                            <div id="direct-connection-form" class="connection-form">
+                                                <div class="form-group">
+                                                    <label>Puerto Arduino</label>
+                                                    <div class="input-group">
+                                                        <input type="text" class="form-control" id="arduino-port" placeholder="COM12">
+                                                        <div class="input-group-append">
+                                                            <button class="btn btn-primary" id="connect-direct-button">Conectar</button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                        
-                                        <!-- Conexión WiFi ESP32 -->
-                                        <div id="wifi-connection-form" class="connection-form" style="display:none;">
-                                            <div class="form-group">
-                                                <label>Dirección IP ESP32</label>
-                                                <input type="text" class="form-control" id="esp32-ip" placeholder="192.168.1.64">
+
+                                            <!-- Conexión WiFi ESP32 -->
+                                            <div id="wifi-connection-form" class="connection-form" style="display:none;">
+                                                <div class="form-group">
+                                                    <label>Dirección IP ESP32</label>
+                                                    <input type="text" class="form-control" id="esp32-ip" placeholder="192.168.1.64">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Puerto TCP</label>
+                                                    <input type="number" class="form-control" id="esp32-port" value="8888">
+                                                </div>
+                                                <button class="btn btn-primary" id="connect-wifi-button">Conectar por WiFi</button>
                                             </div>
-                                            <div class="form-group">
-                                                <label>Puerto TCP</label>
-                                                <input type="number" class="form-control" id="esp32-port" value="8888">
-                                            </div>
-                                            <button class="btn btn-primary" id="connect-wifi-button">Conectar por WiFi</button>
-                                        </div>
                                         <!--
                                             <div class="connection-status mt-4">
                                                 Estado: <span id="connection-status" class="badge badge-secondary">Desconocido</span>
@@ -132,135 +132,55 @@
 {% endblock content %}
 
 {% block javascripts %}
+<!-- Incluir Socket.IO -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
+<!-- Incluir el JavaScript compartido para WebSockets -->
+<script src="{{ config.ASSETS_ROOT }}/js/arduino-websocket.js"></script>
+
 <script>
-    // Funciones
-    function checkConnectionStatus() {
-        $.ajax({
-            url: '/arduino/status',
-            method: 'GET',
-            success: function(response) {
-                if (response.status === 'connected') {
-                    $('#connection-status').removeClass('badge-secondary badge-danger').addClass('badge-success').text('Conectado');
-                    $('#arduino-port').val(response.port);
-                } else {
-                    $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Desconectado');
-                }
-            },
-            error: function() {
-                $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
-            }
-        });
-    }
-        
-        // Función para enviar comandos al ESP32
-    function sendServoCommandToESP32(servo_id, angle, esp32IP) {
-        if (!esp32IP) {
-            alert("Por favor, ingrese la IP del ESP32");
-            return;
-        }
-        
-        fetch(`http://${esp32IP}/set_servo`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ servo_id: servo_id, angle: angle })
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log('Respuesta del ESP32:', data);
-            // Actualizar UI según sea necesario
-        })
-        .catch(error => {
-            console.error('Error enviando comando al ESP32:', error);
-            // Mostrar error en la UI
-        });
-    }
 
+    // Función para alternar entre formularios de conexión
+function toggleConnectionForm() {
+    const directForm = document.getElementById('direct-connection-form');
+    const wifiForm = document.getElementById('wifi-connection-form');
+    
+    if (!directForm || !wifiForm) {
+        return; // No están presentes ambos formularios
+    }
+    
+    const useWifi = document.getElementById('connection-wifi').checked;
+    
+    if (useWifi) {
+        directForm.style.display = 'none';
+        wifiForm.style.display = 'block';
+    } else {
+        directForm.style.display = 'block';
+        wifiForm.style.display = 'none';
+    }
+}
 
-   $(document).ready(function() {
+// Event listeners para los radio buttons
+document.getElementById('connection-direct').addEventListener('change', toggleConnectionForm);
+document.getElementById('connection-wifi').addEventListener('change', toggleConnectionForm);
+
     // Configuración
     const numServos = 30;
     let servoPositions = Array(numServos).fill(90); // Inicialmente todos en 90°
     
-    // Verificar estado de conexión al cargar
-    checkConnectionStatus();
-    
-    // Generar tarjetas de servos
-    generateServoCards();
-    
-    // Manejar conexión con Arduino
-    $('#connect-button').on('click', function() {
-        const port = $('#arduino-port').val();
-        connectToArduino(port);
-    });
-    
-    // Resetear todos los servos
-    $('#reset-all').on('click', function() {
-        resetAllServos();
-    });
-    
-    // Cambiar entre modos de conexión
-$('input[name="connection-type"]').change(function() {
-    if ($(this).val() === 'direct') {
-        $('#direct-connection-form').show();
-        $('#wifi-connection-form').hide();
-    } else {
-        $('#direct-connection-form').hide();
-        $('#wifi-connection-form').show();
-    }
-});
-
-// Botón de conexión directa
-$('#connect-direct-button').on('click', function() {
-    const port = $('#arduino-port').val();
-    connectToArduino(false, port);
-});
-
-// Botón de conexión WiFi
-$('#connect-wifi-button').on('click', function() {
-    const host = $('#esp32-ip').val();
-    const port = $('#esp32-port').val();
-    connectToArduino(true, null, host, port);
-});
-
-// Función de conexión con parámetros adaptados
-function connectToArduino(useTcp, serialPort, host, tcpPort) {
-    let connectData = {};
-    
-    if (useTcp) {
-        connectData = {
-            use_tcp: true,
-            host: host,
-            port: parseInt(tcpPort)
-        };
-    } else {
-        connectData = {
-            use_tcp: false,
-            serial_port: serialPort
-        };
-    }
-    
-    $.ajax({
-        url: '/arduino/connect',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(connectData),
-        success: function(response) {
-            if (response.status === 'success') {
-                $('#connection-status').removeClass('badge-secondary badge-danger').addClass('badge-success').text('Conectado');
-                showNotification('success', response.message);
-            } else {
-                $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
-                showNotification('danger', response.message);
-            }
-        },
-        error: function(xhr) {
-            $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
-            showNotification('danger', xhr.responseJSON?.message || 'Error al conectar');
+    // Función para actualizar todos los servos a posición por defecto (90°)
+    function updateAllServosToDefaultPosition() {
+        for (let i = 0; i < numServos; i++) {
+            const servoId = i + 2;
+            $(`#slider-${servoId}`).val(90);
+            $(`#position-${servoId}`).text('90°');
+            servoPositions[i] = 90;
         }
+    }
+    
+    $(document).ready(function() {
+        // Generar tarjetas de servos
+        generateServoCards();
     });
-}
     
     function generateServoCards() {
         const container = $('#servo-container');
@@ -308,103 +228,60 @@ function connectToArduino(useTcp, serialPort, host, tcpPort) {
         $('.servo-slider').on('change', function() {
             const servoId = $(this).data('servo-id');
             const position = parseInt($(this).val());
-            moveServo(servoId, position);
+            moveServoWithRetry(servoId, position);
         });
         
         $('.set-0').on('click', function() {
             const servoId = $(this).data('servo-id');
             $(`#slider-${servoId}`).val(0);
             $(`#position-${servoId}`).text('0°'); // Actualizar visualmente de inmediato
-            moveServo(servoId, 0);
+            moveServoWithRetry(servoId, 0);
         });
 
         $('.set-90').on('click', function() {
             const servoId = $(this).data('servo-id');
             $(`#slider-${servoId}`).val(90);
             $(`#position-${servoId}`).text('90°'); // Actualizar visualmente de inmediato
-            moveServo(servoId, 90);
+            moveServoWithRetry(servoId, 90);
         });
 
         $('.set-180').on('click', function() {
             const servoId = $(this).data('servo-id');
             $(`#slider-${servoId}`).val(180);
             $(`#position-${servoId}`).text('180°'); // Actualizar visualmente de inmediato
-            moveServo(servoId, 180);
+            moveServoWithRetry(servoId, 180);
         });
     }
     
-    function moveServo(servoId, position) {
+    // Función para mover servo con reintentos
+    function moveServoWithRetry(servoId, position) {
         // Guardar la posición anterior para recuperarla en caso de error
         const previousPosition = servoPositions[servoId - 2];
         
         // Actualizar la posición localmente de inmediato
         servoPositions[servoId - 2] = position;
         
-        $.ajax({
-            url: '/arduino/set_servo',
-            method: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                servo_id: servoId,
-                angle: position
-            }),
-            success: function(response) {
-                if (response.status !== 'success') {
-                    // Revertir en caso de error en respuesta
-                    $(`#position-${servoId}`).text(previousPosition + '°');
-                    $(`#slider-${servoId}`).val(previousPosition);
-                    servoPositions[servoId - 2] = previousPosition;
-                    showNotification('danger', response.message);
-                }
-            },
-            error: function(xhr) {
-                // Revertir en caso de error de comunicación
+        // Utilizar la función del WebSocket
+        moveServo(servoId, position)
+            .catch(error => {
+                console.error('Error moviendo servo:', error);
+                
+                // Revertir en caso de error
                 $(`#position-${servoId}`).text(previousPosition + '°');
                 $(`#slider-${servoId}`).val(previousPosition);
                 servoPositions[servoId - 2] = previousPosition;
-                showNotification('danger', xhr.responseJSON?.message || 'Error al mover servo');
-            }
-        });
-    }  
-    
-    function resetAllServos() {
-        $.ajax({
-            url: '/arduino/reset_servos',
-            method: 'POST',
-            success: function(response) {
-                if (response.status === 'success') {
-                    showNotification('success', response.message);
-                    
-                    // Actualizar todos los sliders a 90°
-                    for (let i = 0; i < numServos; i++) {
-                        const servoId = i + 2;
-                        $(`#slider-${servoId}`).val(90);
-                        $(`#position-${servoId}`).text('90°');
-                        servoPositions[i] = 90;
+                
+                // Si el error es por falta de conexión, intentar reconectar
+                if (!isConnected) {
+                    showNotification('warning', 'Arduino desconectado. Reconectando...');
+                    // Intentar reconectar con los datos almacenados
+                    if (connectionInfo.connection_type === 'wifi') {
+                        connectToArduino(true, null, connectionInfo.host, connectionInfo.port);
+                    } else {
+                        connectToArduino(false, connectionInfo.serial_port);
                     }
-                } else {
-                    showNotification('danger', response.message);
                 }
-            },
-            error: function(xhr) {
-                showNotification('danger', xhr.responseJSON?.message || 'Error al resetear servos');
-            }
-        });
+            });
     }
-    
-    function showNotification(type, message) {
-        $.notify({
-            icon: type === 'success' ? 'tim-icons icon-check-2' : 'tim-icons icon-alert-circle-exc',
-            message: message
-        }, {
-            type: type,
-            timer: 4000,
-            placement: {
-                from: 'top',
-                align: 'right'
-            }
-        });
-    }
-});
 </script>
 {% endblock javascripts %}

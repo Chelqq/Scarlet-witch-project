@@ -71,148 +71,74 @@
 {% endblock stylesheets %}
 
 {% block content %}
-<div class="content">
-    <div class="row">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="title">Secuencias de Movimiento Predefinidas</h5>
-                    <p class="category">Guarda, edita y ejecuta secuencias de movimientos para tus servos</p>
+<!-- Reemplaza el bloque actual de conexión en tables.html con este -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Configuración de conexión</h5>
+            </div>
+            <div class="card-body">
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="radio" name="connection-type" id="connection-direct" value="direct" checked>
+                    <label class="form-check-label" for="connection-direct">
+                        Conexión directa a Arduino
+                    </label>
                 </div>
-                <div class="card-body">
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Puerto Arduino</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="arduino-port" placeholder="COM12">
-                                    <div class="input-group-append">
-                                        <button class="btn btn-primary" id="connect-button">Conectar</button>
-                                    </div>
-                                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="radio" name="connection-type" id="connection-wifi" value="wifi">
+                    <label class="form-check-label" for="connection-wifi">
+                        Conexión WiFi a través de ESP32
+                    </label>
+                </div>
+                
+                <!-- Conexión directa Arduino -->
+                <div id="direct-connection-form" class="connection-form">
+                    <div class="form-group">
+                        <label>Puerto Arduino</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="arduino-port" placeholder="COM12">
+                            <div class="input-group-append">
+                                <button class="btn btn-primary" id="connect-direct-button">Conectar</button>
                             </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="connection-status mt-4">
-                                Estado: <span id="connection-status" class="badge badge-secondary">Desconocido</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <button id="create-sequence" class="btn btn-success">Crear Nueva Secuencia</button>
-                        </div>
-                    </div>
-                    
-                    <div class="row" id="sequences-container">
-                        <!-- Aquí se cargarán dinámicamente las secuencias guardadas -->
-                        <div class="col-12 text-center" id="loading-area">
-                            <div class="spinner-border text-primary loading-spinner" role="status">
-                                <span class="sr-only">Cargando...</span>
-                            </div>
-                            <p>Cargando secuencias guardadas...</p>
                         </div>
                     </div>
                 </div>
+                
+                <!-- Conexión WiFi ESP32 -->
+                <div id="wifi-connection-form" class="connection-form" style="display:none;">
+                    <div class="form-group">
+                        <label>Dirección IP ESP32</label>
+                        <input type="text" class="form-control" id="esp32-ip" placeholder="192.168.0.21">
+                    </div>
+                    <div class="form-group">
+                        <label>Puerto TCP</label>
+                        <input type="number" class="form-control" id="esp32-port" value="8888">
+                    </div>
+                    <button class="btn btn-primary" id="connect-wifi-button">Conectar por WiFi</button>
+                </div>
+                
+                <div class="connection-status mt-4">
+                    Estado: <span id="connection-status" class="badge badge-secondary">Desconocido</span>
+                </div>
             </div>
         </div>
     </div>
-</div>
-
-<!-- Modal para editar/crear secuencia -->
-<div class="modal fade" id="sequenceModal" tabindex="-1" role="dialog" aria-labelledby="sequenceModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="sequenceModalLabel">Editar Secuencia</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <form id="sequence-form">
-                    <input type="hidden" id="sequence-id" value="">
-                    <div class="form-group">
-                        <label for="sequence-name">Nombre de la Secuencia:</label>
-                        <input type="text" class="form-control" id="sequence-name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="sequence-description">Descripción:</label>
-                        <textarea class="form-control" id="sequence-description" rows="2"></textarea>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Pasos de la Secuencia:</label>
-                        <div id="steps-container">
-                            <!-- Aquí se generarán dinámicamente los pasos -->
-                        </div>
-                        <button type="button" class="btn btn-sm btn-info mt-2" id="add-step">Añadir Paso</button>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Configuración General:</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="loop-sequence">
-                            <label class="form-check-label" for="loop-sequence">
-                                Repetir secuencia (modo bucle)
-                            </label>
-                        </div>
-                        <div class="form-group mt-2">
-                            <label for="default-delay">Retardo entre pasos (ms):</label>
-                            <input type="number" class="form-control delay-input" id="default-delay" value="100" min="0" max="5000">
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="save-sequence">Guardar</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal de confirmación para eliminar secuencia -->
-<div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="deleteModalLabel">Confirmar Eliminación</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                ¿Estás seguro de que deseas eliminar esta secuencia? Esta acción no se puede deshacer.
-                <input type="hidden" id="delete-sequence-id">
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-danger" id="confirm-delete">Eliminar</button>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock content %}
+</div>{% endblock content %}
 
 {% block javascripts %}
+<!-- Incluir Socket.IO -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
+<!-- Incluir el JavaScript compartido para WebSockets -->
+<script src="{{ config.ASSETS_ROOT }}/js/arduino-websocket.js"></script>
+
 <script>
     $(document).ready(function() {
         // Variable global para almacenar las secuencias cargadas
         let loadedSequences = [];
         
-        // Verificar estado de conexión al cargar
-        checkConnectionStatus();
-        
         // Cargar secuencias guardadas
         loadSavedSequences();
-        
-        // Manejar conexión con Arduino
-        $('#connect-button').on('click', function() {
-            const port = $('#arduino-port').val();
-            connectToArduino(port);
-        });
         
         // Abrir modal para crear nueva secuencia
         $('#create-sequence').on('click', function() {
@@ -238,49 +164,6 @@
         });
         
         // Funciones
-        function checkConnectionStatus() {
-            $.ajax({
-                url: '/arduino/status',
-                method: 'GET',
-                success: function(response) {
-                    if (response.status === 'connected') {
-                        $('#connection-status').removeClass('badge-secondary badge-danger').addClass('badge-success').text('Conectado');
-                        $('#arduino-port').val(response.port || "COM12");
-                    } else {
-                        $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Desconectado');
-                    }
-                },
-                error: function() {
-                    $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
-                }
-            });
-        }
-        
-        function connectToArduino(port) {
-            $.ajax({
-                url: '/arduino/connect',
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({ 
-                    use_tcp: false,
-                    serial_port: port 
-                }),
-                success: function(response) {
-                    if (response.status === 'success') {
-                        $('#connection-status').removeClass('badge-secondary badge-danger').addClass('badge-success').text('Conectado');
-                        showNotification('success', response.message);
-                    } else {
-                        $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
-                        showNotification('danger', response.message);
-                    }
-                },
-                error: function(xhr) {
-                    $('#connection-status').removeClass('badge-secondary badge-success').addClass('badge-danger').text('Error');
-                    showNotification('danger', xhr.responseJSON?.message || 'Error al conectar');
-                }
-            });
-        }
-        
         function loadSavedSequences() {
             $('#loading-area').show();
             
@@ -564,137 +447,6 @@
                 error: function(xhr) {
                     $('#deleteModal').modal('hide');
                     showNotification('danger', xhr.responseJSON?.message || 'Error al eliminar secuencia');
-                }
-            });
-        }
-        
-        function executeSequence(sequence) {
-            if (!sequence || !sequence.steps || sequence.steps.length === 0) {
-                showNotification('warning', 'La secuencia está vacía');
-                return;
-            }
-            
-            // Comprobar si el Arduino está conectado
-            if ($('#connection-status').text() !== 'Conectado') {
-                showNotification('warning', 'Arduino no está conectado. Conecta primero.');
-                return;
-            }
-            
-            // Mostrar notificación de inicio
-            showNotification('info', `Ejecutando secuencia: ${sequence.name}`);
-            
-            // Enviar la secuencia completa al backend para ejecución
-            $.ajax({
-                url: '/arduino/run_sequence',
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({ sequence: sequence }),
-                success: function(response) {
-                    if (response.status === 'success') {
-                        showNotification('success', 'Secuencia completada correctamente');
-                    } else {
-                        showNotification('danger', response.message || 'Error al ejecutar secuencia');
-                    }
-                },
-                error: function(xhr) {
-                    showNotification('danger', xhr.responseJSON?.message || 'Error al ejecutar secuencia');
-                }
-            });
-        }
-        
-        // Implementación alternativa para ejecutar la secuencia en el frontend
-        function executeSequenceClient(sequence) {
-            if (!sequence || !sequence.steps || sequence.steps.length === 0) {
-                showNotification('warning', 'La secuencia está vacía');
-                return;
-            }
-            
-            // Comprobar si el Arduino está conectado
-            if ($('#connection-status').text() !== 'Conectado') {
-                showNotification('warning', 'Arduino no está conectado. Conecta primero.');
-                return;
-            }
-            
-            // Mostrar notificación de inicio
-            showNotification('info', `Ejecutando secuencia: ${sequence.name}`);
-            
-            // Ejecutar secuencia paso a paso
-            let stepIndex = 0;
-            let isRunning = true;
-            
-            function executeStep() {
-                if (!isRunning) return;
-                
-                if (stepIndex >= sequence.steps.length) {
-                    if (sequence.loop) {
-                        // Reiniciar la secuencia si está en modo bucle
-                        stepIndex = 0;
-                        setTimeout(executeStep, 500); // Pequeña pausa antes de reiniciar el bucle
-                    } else {
-                        showNotification('success', 'Secuencia completada');
-                    }
-                    return;
-                }
-                
-                const step = sequence.steps[stepIndex];
-                
-                // Enviar comando al Arduino
-                $.ajax({
-                    url: '/arduino/set_servo',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({
-                        servo_id: step.servo_id,
-                        angle: step.angle
-                    }),
-                    success: function(response) {
-                        if (response.status === 'success') {
-                            // Pasar al siguiente paso después del retardo especificado
-                            stepIndex++;
-                            setTimeout(executeStep, step.delay || sequence.defaultDelay || 100);
-                        } else {
-                            isRunning = false;
-                            showNotification('danger', `Error en paso ${stepIndex+1}: ${response.message}`);
-                        }
-                    },
-                    error: function(xhr) {
-                        isRunning = false;
-                        showNotification('danger', `Error en paso ${stepIndex+1}: ${xhr.responseJSON?.message || 'Error de comunicación'}`);
-                    }
-                });
-            }
-            
-            // Botón para detener la ejecución
-            $('<button>')
-                .addClass('btn btn-sm btn-danger stop-sequence')
-                .text('Detener')
-                .on('click', function() {
-                    isRunning = false;
-                    showNotification('warning', 'Ejecución de secuencia detenida');
-                    $(this).remove();
-                })
-                .appendTo('body')
-                .css({
-                    position: 'fixed',
-                    bottom: '20px',
-                    right: '20px',
-                    zIndex: 9999
-                });
-            
-            // Iniciar la ejecución de la secuencia
-            executeStep();
-        }
-        
-        function showNotification(type, message) {
-            $.notify({
-                icon: type === 'success' ? 'tim-icons icon-check-2' : 'tim-icons icon-alert-circle-exc',
-                message: message
-            }, {
-                type: type,
-                timer: 4000,
-                placement: {
-                    from: 'top',
-                    align: 'right'
                 }
             });
         }
