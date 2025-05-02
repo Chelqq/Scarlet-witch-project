@@ -302,7 +302,8 @@ def handle_run_sequence(data):
     return response
 
 @socketio.on('get_connection_status')
-def handle_get_connection_status():
+def handle_get_connection_status(sid=None):  # Añadir el parámetro sid
+    """Maneja la solicitud de estado de conexión desde el cliente"""
     global arduino_controller, arduino_connection
     
     # Actualizar el estado actual
