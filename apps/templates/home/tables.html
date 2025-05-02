@@ -3,7 +3,6 @@
 {% block title %} Secuencias Preestablecidas {% endblock %} 
 
 {% block stylesheets %}
-<link href="{{ config.ASSETS_ROOT }}/css/sequences-modal.css" rel="stylesheet" />
 <style>
     .sequence-card {
         margin-bottom: 1.5rem;
@@ -67,64 +66,173 @@
         cursor: pointer;
         color: #ff0000;
     }
+    .connection-form {
+        margin-bottom: 15px;
+    }
 </style>
 {% endblock stylesheets %}
 
 {% block content %}
-<!-- Reemplaza el bloque actual de conexión en tables.html con este -->
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header">
-                <h5>Configuración de conexión</h5>
-            </div>
-            <div class="card-body">
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="radio" name="connection-type" id="connection-direct" value="direct" checked>
-                    <label class="form-check-label" for="connection-direct">
-                        Conexión directa a Arduino
-                    </label>
+<div class="content">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="title">Secuencias de Movimiento Predefinidas</h5>
+                    <p class="category">Guarda, edita y ejecuta secuencias de movimientos para tus servos</p>
                 </div>
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="radio" name="connection-type" id="connection-wifi" value="wifi">
-                    <label class="form-check-label" for="connection-wifi">
-                        Conexión WiFi a través de ESP32
-                    </label>
-                </div>
-                
-                <!-- Conexión directa Arduino -->
-                <div id="direct-connection-form" class="connection-form">
-                    <div class="form-group">
-                        <label>Puerto Arduino</label>
-                        <div class="input-group">
-                            <input type="text" class="form-control" id="arduino-port" placeholder="COM12">
-                            <div class="input-group-append">
-                                <button class="btn btn-primary" id="connect-direct-button">Conectar</button>
+                <div class="card-body">
+                    <!-- Sección de configuración de conexión -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Configuración de conexión</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="radio" name="connection-type" id="connection-direct" value="direct" checked>
+                                        <label class="form-check-label" for="connection-direct">
+                                            Conexión directa a Arduino
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="radio" name="connection-type" id="connection-wifi" value="wifi">
+                                        <label class="form-check-label" for="connection-wifi">
+                                            Conexión WiFi a través de ESP32
+                                        </label>
+                                    </div>
+                                    
+                                    <!-- Conexión directa Arduino -->
+                                    <div id="direct-connection-form" class="connection-form">
+                                        <div class="form-group">
+                                            <label>Puerto Arduino</label>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" id="arduino-port" placeholder="COM12">
+                                                <div class="input-group-append">
+                                                    <button class="btn btn-primary" id="connect-direct-button">Conectar</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Conexión WiFi ESP32 -->
+                                    <div id="wifi-connection-form" class="connection-form" style="display:none;">
+                                        <div class="form-group">
+                                            <label>Dirección IP ESP32</label>
+                                            <input type="text" class="form-control" id="esp32-ip" placeholder="192.168.0.21">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Puerto TCP</label>
+                                            <input type="number" class="form-control" id="esp32-port" value="8888">
+                                        </div>
+                                        <button class="btn btn-primary" id="connect-wifi-button">Conectar por WiFi</button>
+                                    </div>
+                                    
+                                    <div class="connection-status mt-4">
+                                        Estado: <span id="connection-status" class="badge badge-secondary">Desconocido</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Conexión WiFi ESP32 -->
-                <div id="wifi-connection-form" class="connection-form" style="display:none;">
-                    <div class="form-group">
-                        <label>Dirección IP ESP32</label>
-                        <input type="text" class="form-control" id="esp32-ip" placeholder="192.168.0.21">
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <button id="create-sequence" class="btn btn-success">Crear Nueva Secuencia</button>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Puerto TCP</label>
-                        <input type="number" class="form-control" id="esp32-port" value="8888">
+                    
+                    <div class="row" id="sequences-container">
+                        <!-- Aquí se cargarán dinámicamente las secuencias guardadas -->
+                        <div class="col-12 text-center" id="loading-area">
+                            <div class="spinner-border text-primary loading-spinner" role="status">
+                                <span class="sr-only">Cargando...</span>
+                            </div>
+                            <p>Cargando secuencias guardadas...</p>
+                        </div>
                     </div>
-                    <button class="btn btn-primary" id="connect-wifi-button">Conectar por WiFi</button>
-                </div>
-                
-                <div class="connection-status mt-4">
-                    Estado: <span id="connection-status" class="badge badge-secondary">Desconocido</span>
                 </div>
             </div>
         </div>
     </div>
-</div>{% endblock content %}
+</div>
+
+<!-- Modal para editar/crear secuencia -->
+<div class="modal fade" id="sequenceModal" tabindex="-1" role="dialog" aria-labelledby="sequenceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sequenceModalLabel">Editar Secuencia</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="sequence-form">
+                    <input type="hidden" id="sequence-id" value="">
+                    <div class="form-group">
+                        <label for="sequence-name">Nombre de la Secuencia:</label>
+                        <input type="text" class="form-control" id="sequence-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sequence-description">Descripción:</label>
+                        <textarea class="form-control" id="sequence-description" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Pasos de la Secuencia:</label>
+                        <div id="steps-container">
+                            <!-- Aquí se generarán dinámicamente los pasos -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-info mt-2" id="add-step">Añadir Paso</button>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Configuración General:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="loop-sequence">
+                            <label class="form-check-label" for="loop-sequence">
+                                Repetir secuencia (modo bucle)
+                            </label>
+                        </div>
+                        <div class="form-group mt-2">
+                            <label for="default-delay">Retardo entre pasos (ms):</label>
+                            <input type="number" class="form-control delay-input" id="default-delay" value="100" min="0" max="5000">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="save-sequence">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmación para eliminar secuencia -->
+<div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirmar Eliminación</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                ¿Estás seguro de que deseas eliminar esta secuencia? Esta acción no se puede deshacer.
+                <input type="hidden" id="delete-sequence-id">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete">Eliminar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
 
 {% block javascripts %}
 <!-- Incluir Socket.IO -->

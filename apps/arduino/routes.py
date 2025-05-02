@@ -21,6 +21,90 @@ SEQUENCES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 # Asegurar que el directorio existe
 os.makedirs(SEQUENCES_DIR, exist_ok=True)
 
+# Asegúrate de que estas funciones estén en apps/arduino/routes.py
+
+@blueprint.route('/sequences', methods=['GET'])
+@login_required
+def get_sequences():
+    """Obtiene todas las secuencias guardadas"""
+    try:
+        sequences = []
+        
+        # Leer todos los archivos JSON en el directorio de secuencias
+        for filename in os.listdir(SEQUENCES_DIR):
+            if filename.endswith('.json'):
+                file_path = os.path.join(SEQUENCES_DIR, filename)
+                try:
+                    with open(file_path, 'r') as f:
+                        sequence = json.load(f)
+                        sequences.append(sequence)
+                except Exception as e:
+                    logger.error(f"Error al leer archivo de secuencia {filename}: {str(e)}")
+        
+        return jsonify({
+            'status': 'success',
+            'sequences': sequences
+        })
+    
+    except Exception as e:
+        import traceback
+        logger.error(f"Error al obtener secuencias: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Error al obtener secuencias: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+@blueprint.route('/sequences', methods=['POST'])
+@login_required
+def save_sequence():
+    """Guarda una nueva secuencia o actualiza una existente"""
+    try:
+        sequence = request.json
+        
+        # Validar datos mínimos
+        if not sequence.get('name'):
+            return jsonify({
+                'status': 'error',
+                'message': 'El nombre de la secuencia es obligatorio'
+            }), 400
+        
+        if not sequence.get('steps') or not isinstance(sequence['steps'], list) or len(sequence['steps']) == 0:
+            return jsonify({
+                'status': 'error',
+                'message': 'La secuencia debe tener al menos un paso'
+            }), 400
+        
+        # Generar ID si es una nueva secuencia
+        if not sequence.get('id'):
+            sequence['id'] = f"seq_{int(time.time())}"
+        
+        # Asegurarse de que el directorio existe
+        os.makedirs(SEQUENCES_DIR, exist_ok=True)
+        
+        # Guardar la secuencia en un archivo JSON
+        file_path = os.path.join(SEQUENCES_DIR, f"{sequence['id']}.json")
+        
+        with open(file_path, 'w') as f:
+            json.dump(sequence, f, indent=2)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Secuencia guardada correctamente',
+            'sequence_id': sequence['id']
+        })
+    
+    except Exception as e:
+        import traceback
+        logger.error(f"Error al guardar secuencia: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Error al guardar secuencia: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
 @blueprint.route('/status')
 @login_required
 def status():
