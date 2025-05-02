@@ -75,7 +75,7 @@ def connect():
                 app.logger.info("Controller is None, initializing with TCP parameters")
                 arduino_controller = init_arduino(
                     host=host, 
-                    port=port, 
+                    tcp_port=port, 
                     use_tcp=True
                 )
                 

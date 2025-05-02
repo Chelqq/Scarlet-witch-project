@@ -2,7 +2,30 @@
 
 {% block title %} Manual de Usuario - Interfaz de Control del Robot InMoov {% endblock %} 
 
-{% block stylesheets %}{% endblock stylesheets %}
+{% block stylesheets %}
+<style>
+  .feature-box {
+    background-color: rgba(0,0,0,0.03);
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 20px;
+  }
+  .connection-guide {
+    background-color: rgba(0,0,0,0.05);
+    border-left: 4px solid #e14eca;
+    padding: 15px;
+    margin: 15px 0;
+  }
+  .faq-item {
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+  }
+  .faq-item:last-child {
+    border-bottom: none;
+  }
+</style>
+{% endblock stylesheets %}
 
 {% block content %}
 
@@ -12,66 +35,300 @@
         <div class="card">
           <div class="card-header text-center">
             <h1 class="card-title">Manual de Usuario - Interfaz de Control del Robot InMoov</h1>
+            <p class="category">Versión 6.9 - Mayo 2025</p>
           </div>
           <div class="card-body">
             
+            <!-- SECCIÓN 1: INTRODUCCIÓN -->
             <div class="row align-items-center">
               <div class="col-md-8">
                 <h2 class="text-primary">1. Introducción</h2>
-                <p>Este manual describe el uso de la Interfaz de Control del Robot InMoov, una aplicación web diseñada para controlar el robot humanoide de código abierto InMoov.</p>
-                <h2 class="text-primary">2. Descripción del Robot</h2>
-                <p>InMoov es un robot humanoide de tamaño real, diseñado para ser impreso en 3D y animado. Creado por <a href="https://inmoov.fr/" target="_blank">Gael Langevin</a>, este proyecto de código abierto facilita el acceso a la robótica avanzada.</p>
+                <p>Bienvenido al sistema de control para el Robot InMoov, una plataforma web diseñada para facilitar la manipulación de robots humanoides mediante una interfaz intuitiva y flexible. Este manual le guiará a través de todas las funcionalidades disponibles y le ayudará a sacar el máximo provecho del sistema.</p>
+                <h3>1.1 ¿Qué es InMoov?</h3>
+                <p>InMoov es un robot humanoide de tamaño real, diseñado para ser impreso en 3D y animado mediante servomotores. Creado por <a href="https://inmoov.fr/" target="_blank">Gael Langevin</a>, este proyecto de código abierto democratiza el acceso a la robótica avanzada al proporcionar planos e instrucciones gratuitas para construir un robot humanoide completo.</p>
               </div>
               <div class="col-md-4 text-center">
                 <img src="https://inmoov.fr/wp-content/uploads/2013/07/InMoov-5signa.jpg" class="img-fluid rounded" alt="Robot InMoov">
               </div>
             </div>
             
-            <h2 class="text-primary">3. Características Principales</h2>
+            <!-- SECCIÓN 2: CAPACIDADES DEL SISTEMA -->
+            <h2 class="text-primary mt-4">2. Capacidades del Sistema</h2>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="feature-box">
+                  <h4>Control Individual de Servomotores</h4>
+                  <p>Controle con precisión hasta 30 servomotores mediante una interfaz intuitiva de deslizadores.</p>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="feature-box">
+                  <h4>Secuencias Personalizadas</h4>
+                  <p>Cree, guarde y ejecute secuencias complejas de movimientos para automatizar tareas.</p>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="feature-box">
+                  <h4>Control por Gestos</h4>
+                  <p>Manipule el robot mediante gestos de mano capturados por la webcam de su computadora.</p>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="feature-box">
+                  <h4>Conexión Flexible</h4>
+                  <p>Conéctese directamente por cable USB o de forma inalámbrica mediante WiFi con ESP32.</p>
+                </div>
+              </div>
+            </div>
             
-            <h3 class="text-success">3.1 Control de Movimiento</h3>
-            <ul>
-              <li><strong>Movimientos Articulados de la Mano:</strong> Control de cada dedo mediante sliders.</li>
-              <li><strong>Posicionamiento del Brazo:</strong> Manejo del hombro, codo y muñeca a través de cinemática directa.</li>
-              <li><strong>Control de Cabeza y Cuello:</strong> Ajuste intuitivo de la mirada mediante controles de inclinación.</li>
-              <li><strong>Biblioteca de Poses:</strong> Guardado y carga de posiciones comunes para acceso rápido.</li>
-              <li><strong>Programación de Secuencias:</strong> Creación, guardado y reproducción de secuencias de movimiento.</li>
-            </ul>
-
-            <!-- <h3 class="text-success">3.2 Capacidades de Interacción</h3>
-            <ul>
-              <li><strong>Centro de Comandos de Voz:</strong> Envío de comandos de texto a voz a InMoov.</li>
-              <li><strong>Integración de Reconocimiento de Voz:</strong> Permite al robot responder a comandos verbales.</li>
-              <li><strong>Visualización de Sensores:</strong> Datos en tiempo real de temperatura, posición y presión.</li>
-              <li><strong>Visualización de Cámara:</strong> Acceso a la vista del robot mediante soporte de cámara integrada.</li>
-              <li><strong>Conciencia Ambiental:</strong> Monitorización de la percepción del entorno del robot.</li>
-            </ul>
-             -->
-            <h2 class="text-primary">4. Configuración Técnica</h2>
-            <p>La aplicación usa un backend basado en Flask (Python), que se comunica con los sistemas de control del robot mediante conexiones seriales y protocolos personalizados.</p>
+            <!-- SECCIÓN 3: REQUISITOS DEL SISTEMA -->
+            <h2 class="text-primary mt-4">3. Requisitos del Sistema</h2>
+            <div class="row">
+              <div class="col-md-6">
+                <h3 class="text-success">3.1 Hardware Necesario</h3>
+                <ul>
+                  <li><strong>Robot:</strong> Componentes de InMoov o compatible</li>
+                  <li><strong>Controlador:</strong> Arduino MEGA 2560</li>
+                  <li><strong>Opcional:</strong> ESP32 para conexión WiFi</li>
+                  <li><strong>Servomotores:</strong> Hasta 30 servos estándar</li>
+                  <li><strong>Computadora:</strong> Con webcam (para control por gestos)</li>
+                  <li><strong>Alimentación:</strong> Fuente adecuada para servomotores</li>
+                </ul>
+              </div>
+              <div class="col-md-6">
+                <h3 class="text-success">3.2 Software Requerido</h3>
+                <ul>
+                  <li><strong>Navegador:</strong> Chrome, Firefox, Safari o Edge</li>
+                  <li><strong>Firmware Arduino:</strong> 
+                    <ul>
+                      <li>MEGA2560.ino para conexión directa</li>
+                      <li>ESP32.ino para conexión WiFi</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+            </div>
             
-            <h2 class="text-primary">5. Guía de Uso</h2>
+            <!-- SECCIÓN 4: PANEL DE CONTROL -->
+            <h2 class="text-primary mt-4">4. Panel de Control Principal</h2>
+            <p>Nuestro sistema ofrece un panel de control intuitivo con las siguientes secciones:</p>
+            <ul>
+              <li><strong>Command & Control:</strong> Control directo de servomotores con deslizadores</li>
+              <li><strong>Project Intro:</strong> Información sobre el proyecto (esta página)</li>
+              <li><strong>Body Control:</strong> Control mediante gestos de mano</li>
+              <li><strong>Pre programar:</strong> Gestión de secuencias programadas</li>
+            </ul>
+            
+            <!-- SECCIÓN 5: CONTROL DIRECTO -->
+            <h2 class="text-primary mt-4">5. Control Directo de Servos</h2>
+            <div class="row">
+              <div class="col-md-8">
+                <p>La sección de Control Directo permite manipular individualmente cada servomotor con controles deslizantes precisos:</p>
+                <ol>
+                  <li>Asegúrese de que el Arduino esté conectado (ver sección 8)</li>
+                  <li>Utilice los controles deslizantes para ajustar el ángulo de cada servo</li>
+                  <li>Los botones 0°, 90° y 180° permiten posicionar rápidamente en ángulos comunes</li>
+                  <li>El botón "Resetear todos los servos" coloca todos los servos en 90°</li>
+                </ol>
+                <p><em>Nota: El cambio en los controles deslizantes se envía al robot solo cuando suelta el control, no durante el arrastre.</em></p>
+              </div>
+              <div class="col-md-4 text-center">
+                <img src="{{ config.ASSETS_ROOT }}/img/servo-control.jpg" class="img-fluid rounded" alt="Control de Servos" onerror="this.src='https://via.placeholder.com/300x250?text=Control+de+Servos'">
+              </div>
+            </div>
+            
+            <!-- SECCIÓN 6: SECUENCIAS -->
+            <h2 class="text-primary mt-4">6. Secuencias Programadas</h2>
+            <p>La sección de Secuencias Programadas permite crear, guardar y ejecutar series de movimientos:</p>
+            
+            <h3 class="text-success">6.1 Creación de Secuencias</h3>
             <ol>
-              <li>Acceder a la aplicación ingresando la dirección IP del servidor en un navegador compatible.</li>
-              <li>Iniciar sesión con credenciales de usuario (o acceder como invitado con funciones limitadas).</li>
-              <li>Navegar por los paneles de control a través del menú.</li>
-              <li>Utilizar los controles deslizantes y botones en la sección "Controles Rápidos" para ejecutar movimientos básicos.</li>
-              <li>Guardar configuraciones y secuencias de movimiento para su reutilización.</li>
+              <li>Haga clic en el botón "Crear Nueva Secuencia"</li>
+              <li>Complete los campos del formulario:
+                <ul>
+                  <li><strong>Nombre:</strong> Identificador de la secuencia</li>
+                  <li><strong>Descripción:</strong> Detalles sobre la secuencia (opcional)</li>
+                  <li><strong>Pasos:</strong> Defina cada movimiento (Servo ID, Ángulo, Retardo)</li>
+                  <li><strong>Configuración general:</strong> Modo bucle, retardo predeterminado</li>
+                </ul>
+              </li>
+              <li>Haga clic en "Guardar" para almacenar la secuencia</li>
             </ol>
             
-            <h2 class="text-primary">6. Aplicaciones Educativas</h2>
-            <ul>
-              <li>Explorar principios de robótica mediante interacción directa con el robot.</li>
-              <li>Comprender sistemas mecánicos a través del control de movimientos.</li>
-              <li>Aprender programación creando secuencias de movimiento personalizadas.</li>
-              <li>Desarrollar habilidades de resolución de problemas en robótica.</li>
-            </ul>
+            <h3 class="text-success">6.2 Ejecución de Secuencias</h3>
+            <p>Para ejecutar una secuencia guardada, simplemente localice la secuencia deseada en la lista y haga clic en el botón "Ejecutar". La secuencia se enviará al robot y se ejecutará paso a paso, mostrando el progreso mediante notificaciones.</p>
             
-            <h2 class="text-primary">7. Desarrollo Futuro</h2>
-            <ul>
-              <li>Implementación de aprendizaje automático para mejorar los movimientos del robot.</li>
-              <li>Mejoras en visión por computadora para reconocimiento avanzado de objetos.</li>
-            </ul>
+            <!-- SECCIÓN 7: CONTROL POR GESTOS -->
+            <h2 class="text-primary mt-4">7. Control por Gestos</h2>
+            <div class="row">
+              <div class="col-md-7">
+                <p>La sección de Control por Gestos permite manipular el robot mediante movimientos de mano:</p>
+                <h3 class="text-success">Instrucciones:</h3>
+                <ol>
+                  <li>Asegúrese de que su webcam esté habilitada</li>
+                  <li>Posicione su mano frente a la cámara</li>
+                  <li>El sistema detectará qué dedos están levantados cada 5 segundos</li>
+                  <li>Cada dedo controla un servo específico:</li>
+                </ol>
+                <ul>
+                  <li><strong>Pulgar levantado:</strong> Servo 2 a 180°</li>
+                  <li><strong>Índice levantado:</strong> Servo 3 a 180°</li>
+                  <li><strong>Medio levantado:</strong> Servo 4 a 180°</li>
+                  <li><strong>Anular levantado:</strong> Servo 5 a 180°</li>
+                  <li><strong>Meñique levantado:</strong> Servo 6 a 180°</li>
+                </ul>
+                <p><em>Cuando un dedo está bajado, el servo correspondiente se posiciona en 0°.</em></p>
+              </div>
+              <div class="col-md-5 text-center">
+                <img src="{{ config.ASSETS_ROOT }}/img/hand-gesture.jpg" class="img-fluid rounded" alt="Control por Gestos" onerror="this.src='https://via.placeholder.com/300x350?text=Control+por+Gestos'">
+              </div>
+            </div>
+            
+            <!-- SECCIÓN 8: CONFIGURACIÓN DE CONEXIÓN -->
+            <h2 class="text-primary mt-4">8. Configuración de Conexión</h2>
+            <p>Para controlar el robot, debe establecer una conexión con el hardware:</p>
+            
+            <div class="connection-guide">
+              <h3 class="text-success">8.1 Conexión Directa (Arduino)</h3>
+              <ol>
+                <li>Seleccione "Conexión directa a Arduino" en el panel de configuración</li>
+                <li>Ingrese el puerto COM correcto (por ejemplo, COM12)
+                  <ul>
+                    <li>En Windows: Verifique en el Administrador de Dispositivos</li>
+                    <li>En macOS: Utilice un formato como "/dev/cu.usbmodem1201"</li>
+                    <li>En Linux: Utilice un formato como "/dev/ttyACM0"</li>
+                  </ul>
+                </li>
+                <li>Haga clic en "Conectar"</li>
+                <li>Verifique que el estado cambie a "Conectado" (verde)</li>
+              </ol>
+            </div>
+            
+            <div class="connection-guide">
+              <h3 class="text-success">8.2 Conexión WiFi (ESP32)</h3>
+              <ol>
+                <li>Seleccione "Conexión WiFi a través de ESP32" en el panel de configuración</li>
+                <li>Ingrese la dirección IP del ESP32 (por ejemplo, 192.168.1.100)</li>
+                <li>Confirme el puerto TCP (predeterminado: 8888)</li>
+                <li>Haga clic en "Conectar por WiFi"</li>
+                <li>Verifique que el estado cambie a "Conectado" (verde)</li>
+              </ol>
+            </div>
+            
+            <!-- SECCIÓN 9: SOLUCIÓN DE PROBLEMAS -->
+            <h2 class="text-primary mt-4">9. Solución de Problemas</h2>
+            
+            <h3 class="text-success">9.1 Problemas de Conexión</h3>
+            <div class="table-responsive">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>Problema</th>
+                    <th>Posible Causa</th>
+                    <th>Solución</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>No se puede conectar al Arduino</td>
+                    <td>Puerto incorrecto</td>
+                    <td>Verifique el puerto COM en el Administrador de Dispositivos</td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td>Arduino no encendido</td>
+                    <td>Compruebe la alimentación y conexión USB</td>
+                  </tr>
+                  <tr>
+                    <td>Error de conexión WiFi</td>
+                    <td>IP incorrecta</td>
+                    <td>Verifique la dirección IP del ESP32</td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td>Problemas de red</td>
+                    <td>Compruebe que el ESP32 esté en la misma red que la computadora</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <h3 class="text-success">9.2 Problemas con Servomotores</h3>
+            <div class="table-responsive">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>Problema</th>
+                    <th>Posible Causa</th>
+                    <th>Solución</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Servo no responde</td>
+                    <td>Conexión incorrecta</td>
+                    <td>Verifique el cableado al pin correcto</td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td>Alimentación insuficiente</td>
+                    <td>Use fuente externa para los servos</td>
+                  </tr>
+                  <tr>
+                    <td>Movimientos erráticos</td>
+                    <td>Interferencia</td>
+                    <td>Separe los cables de señal y alimentación</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- SECCIÓN 10: PREGUNTAS FRECUENTES -->
+            <h2 class="text-primary mt-4">10. Preguntas Frecuentes</h2>
+            
+            <div class="faq-item">
+              <h4>¿Cuántos servos puedo controlar simultáneamente?</h4>
+              <p>El sistema admite hasta 30 servomotores conectados a los pines 2-31 del Arduino MEGA. Sin embargo, se recomienda no activar más de 10-12 servos al mismo tiempo para evitar sobrecarga eléctrica.</p>
+            </div>
+            
+            <div class="faq-item">
+              <h4>¿Qué tipo de servomotores son compatibles?</h4>
+              <p>El sistema es compatible con servomotores estándar de 50Hz (periodo de 20ms). Esto incluye la mayoría de servos como SG90, MG995, etc. Los servos digitales de alta velocidad también son compatibles.</p>
+            </div>
+            
+            <div class="faq-item">
+              <h4>¿Cómo puedo alimentar correctamente los servomotores?</h4>
+              <p>Los servomotores requieren una fuente de alimentación externa. No intente alimentarlos directamente desde el Arduino. Utilice una fuente de 5-6V con amperaje suficiente (al menos 2A para pocos servos, más de 10A para muchos servos).</p>
+            </div>
+            
+            <!-- SECCIÓN 11: DESARROLLO FUTURO -->
+            <h2 class="text-primary mt-4">11. Desarrollo Futuro</h2>
+            <div class="row">
+              <div class="col-md-6">
+                <ul>
+                  <li>Implementación de aprendizaje automático para mejorar los movimientos del robot</li>
+                  <li>Mejoras en visión por computadora para reconocimiento avanzado de objetos</li>
+                  <li>Integración con sistemas de reconocimiento de voz</li>
+                  <li>Soporte para cinemática inversa avanzada</li>
+                </ul>
+              </div>
+              <div class="col-md-6">
+                <ul>
+                  <li>Interfaz móvil para control desde smartphones y tablets</li>
+                  <li>Integración con sistemas de inteligencia artificial</li>
+                  <li>Soporte para robots adicionales más allá de InMoov</li>
+                  <li>Entorno de programación visual para principiantes</li>
+                </ul>
+              </div>
+            </div>
+            
+            <!-- SECCIÓN 12: CONTACTO Y SOPORTE -->
+            <div class="text-center mt-5">
+              <h3 class="text-primary">Soporte y Contacto</h3>
+              <p>Para más información o soporte técnico, póngase en contacto con:</p>
+              <p><a href="mailto:support@example.com">support@example.com</a> | <a href="https://github.com/yourusername/robot-control-system" target="_blank">Repositorio del Proyecto</a></p>
+            </div>
+            
           </div>
         </div>
       </div>

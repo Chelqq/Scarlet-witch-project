@@ -4,7 +4,7 @@
 // Configuración Wi-Fi - cambia estos valores a tu red WiFi
 const char* ssid = "IZZI-97F2";
 const char* password = "F0AF855197F2";
-
+//192.168.0.21
 // Puerto del servidor TCP
 const int serverPort = 8888;
 WiFiServer server(serverPort);
