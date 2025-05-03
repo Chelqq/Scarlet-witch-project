@@ -56,8 +56,8 @@ class ArduinoController:
         def watchdog_function():
             while self.watchdog_active:
                 try:
-                    # Si han pasado más de 30 segundos desde el último comando, verificar conexión
-                    if time.time() - self.last_command_time > 60:
+                    # Si han pasado más de 60 segundos desde el último comando, verificar conexión
+                    if time.time() - self.last_command_time > 20:
                         logger.info("Watchdog: verificando conexión...")
                         if not self._test_connection():
                             logger.warning("Watchdog: conexión perdida, intentando reconectar...")
