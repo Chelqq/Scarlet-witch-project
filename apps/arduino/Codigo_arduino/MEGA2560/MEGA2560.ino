@@ -5,7 +5,7 @@ int servo_pins[30] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 22, 23, 24, 25, 26
 
 // Variables para watchdog y sistema de timeout
 unsigned long lastCommandTime = 0;
-const unsigned long WATCHDOG_TIMEOUT = 20000; // 10 segundos
+const unsigned long WATCHDOG_TIMEOUT = 30000; // 30 segundos
 
 void setup() {
     Serial.begin(9600);  // Inicializar comunicación serial

@@ -41,6 +41,20 @@ def initialize_arduino_for_video():
         return True
         
     try:
+        try:
+            from flask import current_app
+            if hasattr(current_app, 'config') and 'ARDUINO_CONNECTION' in current_app.config:
+                connection_info = current_app.config['ARDUINO_CONNECTION']
+                logger.info(f"Usando información de conexión existente: {connection_info}")
+                
+                # Si ya hay una conexión activa por WebSocket, USARLA y no intentar reconectar
+                if connection_info.get('is_connected', False):
+                    logger.info("Usando conexión WebSocket existente")
+                    arduino_initialized = True
+                    return True
+        except Exception as e:
+            logger.warning(f"No se pudo obtener información de conexión WebSocket: {str(e)}")
+        
         # Importante: VERIFICAR si el controlador ya existe y ESTÁ CONECTADO
         if arduino_controller is not None and arduino_controller.is_connected():
             logger.info("Arduino ya está conectado, usando conexión existente")

@@ -13,8 +13,9 @@ let connectionInfo = {
 
 // Función para inicializar Socket.IO
 function initSocketIO() {
-    // Verificar si ya existe una conexión
-    if (socket && socket.connected) {
+
+     // Verificar si ya existe una conexión
+     if (socket && socket.connected) {
         console.log('Socket.IO ya está conectado');
         return;
     }
@@ -28,21 +29,33 @@ function initSocketIO() {
         
         // Solicitar estado actual de conexión
         socket.emit('get_connection_status', {}, function(response) {
+            // Actualizar UI basado en el estado de conexión
             updateConnectionUI(response);
+            
+            // Almacenar la información de conexión para uso futuro
+            if (response.is_connected) {
+                isConnected = true;
+                connectionInfo = response;
+                console.log("Usando conexión existente:", connectionInfo);
+            }
         });
     });
     
+    // Agregar manejador para desconexiones
     socket.on('disconnect', function() {
         console.log('Desconectado de WebSocket');
         isConnected = false;
-        updateConnectionStatusUI('Desconectado', false);
     });
     
-    // Manejar eventos específicos de Arduino
+    // Manejador para actualizaciones de estado de conexión
     socket.on('connection_status', function(data) {
         updateConnectionUI(data);
+        
+        // Actualizar variables globales
+        isConnected = data.is_connected;
+        connectionInfo = data;
     });
-    
+
     socket.on('arduino_connection_result', function(data) {
         handleConnectionResult(data);
     });
@@ -88,19 +101,18 @@ function connectToArduino(useTcp, serialPort, host, tcpPort) {
     });
 }
 
-// Función para mover servo
+// Función para mover un servo
 function moveServo(servoId, angle) {
-    if (!socket || !socket.connected) {
-        showNotification('warning', 'No hay conexión con el servidor WebSocket');
-        return Promise.reject('No hay conexión WebSocket');
-    }
-    
-    if (!isConnected) {
-        showNotification('warning', 'Arduino no está conectado');
-        return Promise.reject('Arduino no está conectado');
-    }
-    
     return new Promise((resolve, reject) => {
+        if (!socket || !socket.connected) {
+            reject(new Error('No hay conexión WebSocket'));
+            return;
+        }
+        
+        if (!isConnected) {
+            console.warn('Arduino no está conectado, usando última configuración conocida');
+        }
+        
         socket.emit('set_servo', {
             servo_id: servoId,
             angle: angle
@@ -108,8 +120,7 @@ function moveServo(servoId, angle) {
             if (response.status === 'success') {
                 resolve(response);
             } else {
-                showNotification('danger', response.message);
-                reject(response);
+                reject(new Error(response.message));
             }
         });
     });
