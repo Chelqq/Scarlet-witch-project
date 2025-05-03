@@ -1,0 +1,14 @@
+{
+  "id": "seq_1746173437188",
+  "name": "Checdfsk fsdfssdffingers",
+  "description": "",
+  "loop": false,
+  "defaultDelay": 100,
+  "steps": [
+    {
+      "servo_id": 2,
+      "angle": 90,
+      "delay": 100
+    }
+  ]
+}

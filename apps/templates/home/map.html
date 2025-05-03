@@ -57,6 +57,14 @@
     background-color: #dc3545;
     color: white;
   }
+  
+  /* Estilos para la conexión */
+  .connection-info {
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 5px;
+    background-color: rgba(0,0,0,0.05);
+  }
 </style>
 {% endblock stylesheets %}
 
@@ -69,17 +77,28 @@
             <h1 class="card-title">Hand Gesture Servo Control</h1>
           </div>
           <div class="card-body">
+            <!-- Sección para información de conexión -->
+            <div class="connection-info">
+              <div class="row">
+                <div class="col-md-12">
+                  <h5>Estado de conexión</h5>
+                  <p>Estado: <span id="connection-status" class="badge badge-secondary">Desconocido</span></p>
+                  <p id="connection-details">No hay información de conexión disponible</p>
+                </div>
+              </div>
+            </div>
+            
             <div class="instructions">
               <h4>Instrucciones:</h4>
               <p>Muestra tu mano a la cámara. El sistema detectará qué dedos están levantados cada 5 segundos y controlará los servos de acuerdo a ello:</p>
               <ul>
-                <li><strong>Pulgar levantado:</strong> El servo 2 se moverá a 180°</li>
-                <li><strong>Dedo índice levantado:</strong> El servo 3 se moverá a 180°</li>
-                <li><strong>Dedo medio levantado:</strong> El servo 4 se moverá a 180°</li>
-                <li><strong>Dedo anular levantado:</strong> El servo 5 se moverá a 180°</li>
-                <li><strong>Dedo meñique levantado:</strong> El servo 6 se moverá a 180°</li>
+                <li><strong>Pulgar levantado:</strong> El servo 2 se moverá a 180°</li>
+                <li><strong>Dedo índice levantado:</strong> El servo 3 se moverá a 180°</li>
+                <li><strong>Dedo medio levantado:</strong> El servo 4 se moverá a 180°</li>
+                <li><strong>Dedo anular levantado:</strong> El servo 5 se moverá a 180°</li>
+                <li><strong>Dedo meñique levantado:</strong> El servo 6 se moverá a 180°</li>
               </ul>
-              <p>Cuando un dedo esté abajo, el servo correspondiente se moverá a 0°.</p>
+              <p>Cuando un dedo esté abajo, el servo correspondiente se moverá a 0°.</p>
             </div>            
             </div>
             
@@ -116,4 +135,55 @@
   </div>
 {% endblock content %}
 
-{% block javascripts %}{% endblock javascripts %}
+{% block javascripts %}
+<!-- Incluir Socket.IO -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
+<!-- Incluir el JavaScript compartido para WebSockets -->
+<script src="{{ config.ASSETS_ROOT }}/js/arduino-websocket.js"></script>
+
+<script>
+  $(document).ready(function() {
+    // Socket.IO se inicializa automáticamente desde arduino-websocket.js
+    
+    // Actualizar la UI cuando se reciba el estado de conexión
+    socket.on('connection_status', function(data) {
+      updateConnectionUI(data);
+    });
+    
+    function updateConnectionUI(data) {
+      // Actualizar el estado de conexión
+      let statusText = 'Desconocido';
+      let statusClass = 'badge-secondary';
+      
+      if (data.is_connected) {
+        statusText = 'Conectado';
+        statusClass = 'badge-success';
+      } else {
+        statusText = 'Desconectado';
+        statusClass = 'badge-danger';
+      }
+      
+      $('#connection-status').removeClass('badge-secondary badge-success badge-danger').addClass(statusClass).text(statusText);
+      
+      // Actualizar los detalles de conexión
+      let connectionDetails = '';
+      if (data.is_connected) {
+        if (data.connection_type === 'wifi') {
+          connectionDetails = `Conectado a ESP32 en ${data.host}:${data.port}`;
+        } else {
+          connectionDetails = `Conectado a Arduino en ${data.serial_port}`;
+        }
+      } else {
+        connectionDetails = 'No hay información de conexión disponible';
+      }
+      
+      $('#connection-details').text(connectionDetails);
+    }
+    
+    // Solicitar estado de conexión al cargar la página
+    socket.emit('get_connection_status', {}, function(response) {
+      updateConnectionUI(response);
+    });
+  });
+</script>
+{% endblock javascripts %}

@@ -43,6 +43,9 @@ arduino_connection = {
     'serial_port': None
 }
 
+# Añadir a la configuración de la aplicación
+app.config['ARDUINO_CONNECTION'] = arduino_connection
+
 if not DEBUG:
     Minify(app=app, html=True, js=False, cssless=False)
 
@@ -72,6 +75,7 @@ def handle_connect():
 def handle_disconnect():
     app.logger.info('Cliente desconectado de WebSocket')
 
+# En el controlador de Socket.IO, actualizar el almacenamiento global:
 @socketio.on('connect_arduino')
 def handle_connect_arduino(data):
     global arduino_controller, arduino_connection
@@ -103,7 +107,7 @@ def handle_connect_arduino(data):
                     arduino_controller.tcp_port = port
                     arduino_controller.use_tcp = True
         else:
-            # Modo serial directo con Arduino
+            # Modo serie directo con Arduino
             serial_port = data.get('serial_port', 'COM12')
             baud_rate = data.get('baud_rate', 9600)
             
@@ -136,10 +140,16 @@ def handle_connect_arduino(data):
                 if use_tcp:
                     arduino_connection['host'] = host
                     arduino_connection['port'] = port
+                    arduino_connection['serial_port'] = None
                     message = f"Conectado a ESP32 en {host}:{port}"
                 else:
+                    arduino_connection['host'] = None
+                    arduino_connection['port'] = None
                     arduino_connection['serial_port'] = serial_port
                     message = f"Conectado a Arduino en {serial_port}"
+                
+                # IMPORTANTE: Actualizar la configuración de la aplicación
+                app.config['ARDUINO_CONNECTION'] = arduino_connection
             else:
                 message = "No se pudo conectar con el dispositivo"
     

@@ -30,17 +30,67 @@ status_lock = threading.RLock()
 # Flag to track if Arduino has been initialized for video processing
 arduino_initialized = False
 
+# Modificación a la función initialize_arduino_for_video en video_processing.py
+
 def initialize_arduino_for_video():
     """Ensure Arduino controller is properly initialized for video processing"""
     global arduino_initialized, arduino_controller
     
+    # Si ya está inicializado, no hacer nada
     if arduino_initialized:
         return True
         
     try:
-        # Initialize controller if needed
+        # Importante: VERIFICAR si el controlador ya existe y ESTÁ CONECTADO
+        if arduino_controller is not None and arduino_controller.is_connected():
+            logger.info("Arduino ya está conectado, usando conexión existente")
+            arduino_initialized = True
+            return True
+            
+        # Si existe pero no está conectado, intentar reconectar con la configuración actual
+        if arduino_controller is not None:
+            logger.info("Arduino controller existe pero no está conectado, intentando reconectar")
+            # Intentar reconectar con la configuración actual
+            if arduino_controller.connect():
+                arduino_initialized = True
+                logger.info(f"Reconectado exitosamente a Arduino: {arduino_controller.use_tcp}")
+                return True
+            
+        # Sólo si no hay un controlador o falló la reconexión, inicializar uno nuevo
         if arduino_controller is None:
-            # Autodetectar puerto disponible
+            # Verificar en flask.current_app si hay información sobre conexiones WebSocket
+            try:
+                from flask import current_app
+                if hasattr(current_app, 'config') and 'ARDUINO_CONNECTION' in current_app.config:
+                    connection_info = current_app.config['ARDUINO_CONNECTION']
+                    logger.info(f"Usando información de conexión existente: {connection_info}")
+                    
+                    if connection_info.get('is_connected', False):
+                        if connection_info.get('connection_type') == 'wifi':
+                            # Usar conexión WiFi
+                            arduino_controller = init_arduino(
+                                host=connection_info.get('host'),
+                                tcp_port=connection_info.get('port', 8888),
+                                use_tcp=True,
+                                connect_now=True
+                            )
+                            logger.info(f"Inicializado con conexión WiFi: {connection_info.get('host')}")
+                        else:
+                            # Usar conexión serial
+                            arduino_controller = init_arduino(
+                                serial_port=connection_info.get('serial_port', 'COM12'),
+                                connect_now=True
+                            )
+                            logger.info(f"Inicializado con conexión serial: {connection_info.get('serial_port')}")
+                        
+                        if arduino_controller and arduino_controller.is_connected():
+                            arduino_initialized = True
+                            return True
+            except Exception as e:
+                logger.warning(f"No se pudo obtener información de conexión desde Flask: {str(e)}")
+            
+            # Si no hay información de conexión previa, usar detección automática
+            logger.info("No hay información de conexión previa, usando detección automática")
             from serial.tools.list_ports import comports
             available_ports = [p.device for p in comports()]
             
@@ -54,16 +104,26 @@ def initialize_arduino_for_video():
             
             arduino_controller = init_arduino(
                 serial_port=port_to_use,
-                connect_now=True
+                connect_now=False  # Cambiado a False para no conectar automáticamente
             )
-            
-        # Try to connect if not already connected
+        
+        # En este punto, solo conectar si el usuario lo ha solicitado explícitamente
+        # a través de la interfaz WebSocket o si no hay interfaz WebSocket disponible
         if arduino_controller and not arduino_controller.is_connected():
-            logger.info("Attempting to connect to Arduino for video processing")
-            arduino_controller.connect()
+            try:
+                from flask import current_app
+                if not hasattr(current_app, 'config') or 'SOCKETIO' not in current_app.config:
+                    # Si no hay SocketIO, conectar directamente
+                    logger.info("No hay WebSocket, conectando directamente")
+                    arduino_controller.connect()
+                else:
+                    # Si hay SocketIO, no conectar automáticamente
+                    logger.info("WebSocket disponible, no conectando automáticamente")
+            except Exception:
+                # Si hay algún error, intentar conectar como último recurso
+                arduino_controller.connect()
         
         arduino_initialized = True
-        logger.info(f"Arduino initialized for video: connected={arduino_controller.is_connected()}")
         return arduino_controller.is_connected()
         
     except Exception as e:
