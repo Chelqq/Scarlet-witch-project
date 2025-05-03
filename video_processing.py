@@ -5,6 +5,9 @@ import threading
 import logging
 from apps.arduino.controller import arduino_controller, init_arduino
 
+DISABLE_AUTO_CONNECT = True  # Nueva bandera global
+
+
 # Configure logger
 logger = logging.getLogger(__name__)
 
@@ -35,6 +38,12 @@ arduino_initialized = False
 def initialize_arduino_for_video():
     """Ensure Arduino controller is properly initialized for video processing"""
     global arduino_initialized, arduino_controller
+    
+    # PRIMERO: verificar si debemos omitir la conexión automática
+    if DISABLE_AUTO_CONNECT:
+        logger.info("Conexión automática desactivada, usando controlador existente sin reconectar")
+        arduino_initialized = True
+        return True
     
     # Si ya está inicializado, no hacer nada
     if arduino_initialized:

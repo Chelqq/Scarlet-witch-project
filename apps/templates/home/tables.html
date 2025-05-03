@@ -4,6 +4,34 @@
 
 {% block stylesheets %}
 <style>
+        /* Asegurar que el texto en los campos de entrada sea visible */
+    .modal-body input, 
+    .modal-body select, 
+    .modal-body textarea,
+    .step-servo-id, 
+    .step-angle, 
+    .step-delay {
+        color: #333 !important; /* Texto oscuro */
+        background-color: #fff !important; /* Fondo claro */
+    }
+
+    /* Estilo para las opciones del selector */
+    .modal-body select option {
+        color: #333; /* Texto oscuro para las opciones de los selectores */
+        background-color: #fff; /* Fondo claro para las opciones */
+    }
+
+    /* Mejorar la visibilidad de los pasos */
+    .sequence-step {
+        background-color: rgba(255, 255, 255, 0.1); /* Fondo más visible */
+        border: 1px solid rgba(255, 255, 255, 0.2); /* Borde para mejor contraste */
+    }
+
+    /* Asegurar que los números en los campos numéricos sean visibles */
+    input[type="number"] {
+        color: #333 !important;
+        background-color: #fff !important;
+    }
     .sequence-card {
         margin-bottom: 1.5rem;
         transition: all 0.3s;

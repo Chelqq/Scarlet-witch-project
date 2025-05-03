@@ -6,9 +6,24 @@
   "defaultDelay": 100,
   "steps": [
     {
-      "servo_id": 2,
+      "servo_id": 18,
       "angle": 90,
       "delay": 100
+    },
+    {
+      "servo_id": 27,
+      "angle": 90,
+      "delay": 1000
+    },
+    {
+      "servo_id": 30,
+      "angle": 88,
+      "delay": 5000
+    },
+    {
+      "servo_id": 16,
+      "angle": 3,
+      "delay": 7000
     }
   ]
 }
