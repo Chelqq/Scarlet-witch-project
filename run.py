@@ -43,6 +43,8 @@ app.logger.info("Contexto de aplicación establecido en video_processing")
 
 # Registrar en el bridge
 from arduino_bridge import register_arduino_controller, register_socketio, set_connection_status, set_controller
+
+
 register_arduino_controller(arduino_controller)
 set_controller(arduino_controller)
 register_socketio(socketio)
@@ -63,6 +65,47 @@ arduino_connection = {
     'port': None,
     'serial_port': None
 }
+
+# Asegurarnos de que el controlador exista antes de registrarlo
+if arduino_controller is None:
+    app.logger.warning("arduino_controller es None, inicializando...")
+    # Intenta obtener la configuración de conexión guardada
+    conn_info = app.config.get('ARDUINO_CONNECTION', {})
+    
+    if conn_info.get('is_connected') and conn_info.get('connection_type') == 'wifi':
+        arduino_controller = init_arduino(
+            host=conn_info.get('host'),
+            tcp_port=conn_info.get('port', 8888),
+            use_tcp=True
+        )
+    else:
+        arduino_controller = init_arduino(connect_now=False)
+    
+    if arduino_controller:
+        app.logger.info("Controlador inicializado correctamente")
+    else:
+        app.logger.error("Error al inicializar controlador Arduino")
+
+# Registrar en el bridge
+from arduino_bridge import register_arduino_controller, register_socketio, set_connection_status, set_controller
+if arduino_controller is not None:
+    register_arduino_controller(arduino_controller)
+    set_controller(arduino_controller)
+    app.logger.info("Controlador Arduino registrado globalmente")
+else:
+    app.logger.error("No se pudo registrar el controlador Arduino en el bridge (es None)")
+register_socketio(socketio)
+
+# Actualizar la configuración global de arduino_connection si el controlador existe
+if arduino_controller is not None:
+    arduino_connection['is_connected'] = arduino_controller.is_connected()
+    arduino_connection['connection_type'] = 'wifi' if arduino_controller.use_tcp else 'serial'
+    
+    if arduino_controller.use_tcp:
+        arduino_connection['host'] = arduino_controller.host
+        arduino_connection['port'] = arduino_controller.tcp_port
+    else:
+        arduino_connection['serial_port'] = arduino_controller.serial_port
 
 # Añadir a la configuración de la aplicación
 app.config['ARDUINO_CONNECTION'] = arduino_connection

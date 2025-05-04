@@ -165,13 +165,65 @@ def check_fingers_raised(hand_landmarks):
 
 def control_servos_with_hand(finger_status):
     """Control servos using the same mechanism as pre-programmed sequences"""
-    # Obtener controlador desde el bridge (evitamos sys.modules)
-    from arduino_bridge import get_controller
+    # Obtener controlador desde múltiples fuentes posibles
+    arduino_controller = None
     
-    arduino_controller = get_controller()
+    # 1. Intentar desde el bridge
+    try:
+        from arduino_bridge import get_controller
+        arduino_controller = get_controller()
+        if arduino_controller:
+            logger.info("Controlador obtenido desde bridge")
+    except Exception as e:
+        logger.error(f"Error al obtener controlador desde bridge: {str(e)}")
+    
+    # 2. Si no funciona, intentar directamente desde run.py
+    if not arduino_controller:
+        try:
+            import sys
+            run_module = sys.modules.get('run')
+            if run_module and hasattr(run_module, 'arduino_controller'):
+                arduino_controller = run_module.arduino_controller
+                if arduino_controller:
+                    logger.info("Controlador obtenido directamente desde run.py")
+        except Exception as e:
+            logger.error(f"Error al obtener controlador desde run.py: {str(e)}")
+    
+    # 3. Si aún no hay controlador, intentar inicializar uno nuevo
+    if not arduino_controller:
+        try:
+            from apps.arduino.controller import init_arduino
+            # Usar configuración de conexión si está disponible
+            if app_instance and 'ARDUINO_CONNECTION' in app_instance.config:
+                conn_info = app_instance.config['ARDUINO_CONNECTION']
+                if conn_info.get('connection_type') == 'wifi':
+                    arduino_controller = init_arduino(
+                        host=conn_info.get('host'), 
+                        tcp_port=conn_info.get('port', 8888), 
+                        use_tcp=True
+                    )
+                else:
+                    arduino_controller = init_arduino(
+                        serial_port=conn_info.get('serial_port', 'COM12')
+                    )
+            else:
+                # Configuración por defecto si no hay información
+                arduino_controller = init_arduino(connect_now=False)
+                
+            if arduino_controller:
+                # Si se creó exitosamente, registrarlo en el bridge para futuros usos
+                try:
+                    from arduino_bridge import register_arduino_controller, set_controller
+                    register_arduino_controller(arduino_controller)
+                    set_controller(arduino_controller)
+                    logger.info("Nuevo controlador inicializado y registrado en bridge")
+                except Exception as e:
+                    logger.error(f"Error al registrar nuevo controlador: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error al inicializar nuevo controlador: {str(e)}")
     
     if not arduino_controller:
-        logger.error("Controlador Arduino no disponible en bridge")
+        logger.error("No se pudo obtener un controlador Arduino para los gestos")
         return False
     
     # Verificar conexión

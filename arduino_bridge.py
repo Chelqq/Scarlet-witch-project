@@ -136,6 +136,50 @@ def set_controller(controller):
         logger.info(f"Controller establecido en bridge: {controller is not None}")
 
 def get_controller():
-    """Obtiene el controlador Arduino global"""
+    """Obtiene el controlador Arduino global, inicializándolo si es necesario"""
+    global _arduino_controller
     with _lock:
+        if _arduino_controller is None:
+            try:
+                # Intentar inicializar si no existe
+                from apps.arduino.controller import init_arduino
+                _arduino_controller = init_arduino(connect_now=False)
+                if _arduino_controller:
+                    logger.info("Controlador Arduino inicializado automáticamente en bridge")
+            except Exception as e:
+                logger.error(f"Error al inicializar controlador automáticamente: {str(e)}")
         return _arduino_controller
+
+def ensure_controller():
+    """Asegura que exista un controlador válido, intentando inicializarlo si no existe"""
+    global _arduino_controller
+    with _lock:
+        controller = _arduino_controller
+        
+    if controller is None:
+        try:
+            # Intentar obtener desde run.py primero
+            import sys
+            run_module = sys.modules.get('run')
+            if run_module and hasattr(run_module, 'arduino_controller'):
+                controller = run_module.arduino_controller
+                if controller is not None:
+                    with _lock:
+                        _arduino_controller = controller
+                    logger.info("Controlador recuperado desde run.py")
+                    return controller
+            
+            # Si no está disponible, crear uno nuevo
+            from apps.arduino.controller import init_arduino
+            controller = init_arduino(connect_now=False)
+            if controller:
+                with _lock:
+                    _arduino_controller = controller
+                logger.info("Nuevo controlador inicializado")
+                return controller
+        except Exception as e:
+            logger.error(f"Error al intentar garantizar un controlador: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+    
+    return controller
