@@ -150,10 +150,9 @@ def handle_connect_arduino(data):
             success = arduino_controller.connect()
             
             if success:
-                # Actualizar estado de conexión global
                 from arduino_bridge import set_connection_status
                 set_connection_status(True)
-                app.logger.info("Estado de conexión en bridge actualizado a CONECTADO")
+                logger.info("Estado de conexión en bridge actualizado a CONECTADO")
                 
                 arduino_connection['is_connected'] = True
                 arduino_connection['connection_type'] = 'wifi' if use_tcp else 'serial'
