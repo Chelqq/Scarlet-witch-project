@@ -3,9 +3,7 @@ import mediapipe as mp
 import time
 import threading
 import logging
-from apps.arduino.controller import arduino_controller, init_arduino
-
-DISABLE_AUTO_CONNECT = True  # Nueva bandera global
+import sys
 
 # Variables globales compartidas
 app_instance = None
@@ -15,13 +13,15 @@ lock = threading.RLock()
 # Configure logger
 logger = logging.getLogger(__name__)
 
+# Declarar las variables globales al inicio, antes de cualquier uso
+arduino_controller = None  # Declaración temprana
 
-# Initialize MediaPipe for hand tracking
+# Inicializar MediaPipe para hand tracking
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 
-# Global variables to store finger status
+# Variables globales para almacenar el estado de los dedos
 fingers_up = {
     "thumb": False,
     "index": False,
@@ -30,55 +30,142 @@ fingers_up = {
     "pinky": False
 }
 last_check_time = time.time()
-finger_check_interval = 5  # Check every 5 seconds
+finger_check_interval = 5  # Comprobar cada 5 segundos
 
-# Lock for thread safety when updating finger status
+# Lock para thread safety al actualizar el estado de los dedos
 status_lock = threading.RLock()
 
-# Flag to track if Arduino has been initialized for video processing
+# Flag para rastrear si Arduino ha sido inicializado para procesamiento de video
 arduino_initialized = False
 
 def set_app_context(app, socketio):
-    """Establece el contexto de la aplicación Flask de forma global"""
-    global app_instance, socketio_instance, connection_info
+    """Establece el contexto de la aplicación Flask y el controlador Arduino de forma global"""
+    global app_instance, socketio_instance, connection_info, arduino_controller
+    
     with lock:
         app_instance = app
         socketio_instance = socketio
+        logger.info(f"Contexto de aplicación establecido: app={app is not None}, socketio={socketio is not None}")
+        
+        # NUEVO: Obtener el controlador Arduino directamente del módulo run
+        try:
+            run_module = sys.modules.get('run')
+            if run_module and hasattr(run_module, 'arduino_controller'):
+                arduino_controller = run_module.arduino_controller
+                logger.info(f"Controlador Arduino obtenido directamente del módulo run: {arduino_controller is not None}")
+                
+                # Verificar estado de conexión
+                if arduino_controller is not None:
+                    is_connected = arduino_controller.is_connected()
+                    logger.info(f"Estado de conexión del controlador Arduino: {is_connected}")
+            else:
+                logger.warning("No se pudo obtener el controlador Arduino del módulo run")
+        except Exception as e:
+            logger.error(f"Error accediendo al controlador Arduino: {str(e)}")
+            
         if 'ARDUINO_CONNECTION' in app.config:
             connection_info = app.config['ARDUINO_CONNECTION']
+            logger.info(f"Información de conexión cargada de app.config: {connection_info}")
 
+def control_servos_with_hand(finger_status):
+    """Control Arduino servos based on hand finger positions using direct access to the Arduino controller"""
+    global arduino_controller
+    
+    # Imprimir estado de dedos para debug
+    up_fingers = [f for f, is_up in finger_status.items() if is_up]
+    logger.info(f"Controlando servos con dedos levantados: {', '.join(up_fingers)}")
+    
+    # Probar controlador antes de usarlo
+    if arduino_controller is None:
+        logger.warning("Controlador Arduino no disponible para control por gestos")
+        return False
+    
+    # Verificar conexión
+    if not arduino_controller.is_connected():
+        # Intentar reconectar una vez
+        try:
+            logger.info("Intentando reconectar Arduino para control por gestos")
+            reconnect_success = arduino_controller.connect()
+            logger.info(f"Resultado de reconexión: {reconnect_success}")
+            
+            if not reconnect_success:
+                logger.warning("No se pudo reconectar con Arduino")
+                return False
+        except Exception as e:
+            logger.error(f"Error en reconexión: {str(e)}")
+            return False
+    
+    try:
+        # Mapear dedos a servos específicos
+        servo_mapping = {
+            "thumb": 2,    # Servo en pin 2
+            "index": 3,    # Servo en pin 3
+            "middle": 4,   # Servo en pin 4
+            "ring": 5,     # Servo en pin 5
+            "pinky": 6     # Servo en pin 6
+        }
+        
+        results = []
+        for finger, servo_id in servo_mapping.items():
+            angle = 180 if finger_status[finger] else 0
+            logger.info(f"GESTO_DIRECTO: Servo {servo_id} ({finger}) -> {angle}°")
+            
+            # Usar directamente el controlador
+            success, message = arduino_controller.set_servo(servo_id, angle)
+            logger.info(f"Resultado: {success}, {message}")
+            results.append(success)
+        
+        all_success = all(results)
+        if all_success:
+            logger.info("Todos los comandos de servo enviados correctamente")
+        else:
+            logger.warning("Algunos comandos de servo fallaron")
+        
+        return all_success
+    
+    except Exception as e:
+        logger.error(f"Error controlando servos: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
 
 def initialize_arduino_for_video():
-    """Ensure Arduino controller is properly initialized for video processing"""
-    global arduino_initialized, arduino_controller, connection_info
+    """Asegurar que el controlador Arduino está correctamente inicializado para procesamiento de video"""
+    global arduino_initialized, arduino_controller
     
     if arduino_initialized:
         return True
     
     try:
-        # Verificar si el controlador ya existe y está conectado
-        if arduino_controller is not None and arduino_controller.is_connected():
-            logger.info("Arduino ya está conectado, usando conexión existente")
-            arduino_initialized = True
-            return True
+        # Intentar obtener el controlador directamente de run.py si aún no lo tenemos
+        if arduino_controller is None:
+            run_module = sys.modules.get('run')
+            if run_module and hasattr(run_module, 'arduino_controller'):
+                global arduino_controller
+                arduino_controller = run_module.arduino_controller
+                logger.info(f"Controlador obtenido durante inicialización: {arduino_controller is not None}")
+        
+        # Si tenemos controlador, verificar conexión
+        if arduino_controller is not None:
+            is_connected = arduino_controller.is_connected()
+            logger.info(f"Estado de conexión durante inicialización: {is_connected}")
             
-        # Verificar información de conexión global
-        with lock:
-            current_connection = connection_info
-            
-        if current_connection is not None and current_connection.get('is_connected', False):
-            logger.info(f"Usando información de conexión global: {current_connection}")
-            arduino_initialized = True
-            return True
-            
-        # No intentar conectar de nuevo, sólo marcar como inicializado
-        logger.info("No hay información de conexión disponible, marcando como inicializado sin conectar")
+            if not is_connected:
+                # Intentar conectar una vez
+                try:
+                    logger.info("Intentando conectar Arduino durante inicialización")
+                    connect_success = arduino_controller.connect()
+                    logger.info(f"Resultado de conexión inicial: {connect_success}")
+                except Exception as e:
+                    logger.error(f"Error conectando durante inicialización: {str(e)}")
+        
+        # Marcar como inicializado independientemente del resultado
         arduino_initialized = True
         return True
         
     except Exception as e:
-        logger.error(f"Error initializing Arduino for video: {str(e)}")
-        arduino_initialized = True  # Marcamos como inicializado para evitar reintento
+        logger.error(f"Error inicializando Arduino para video: {str(e)}")
+        arduino_initialized = True  # Marcar como inicializado para evitar reintentos
         return False
 
 def check_fingers_raised(hand_landmarks):
@@ -122,105 +209,23 @@ def check_fingers_raised(hand_landmarks):
         "pinky": pinky_up
     }
 
-def control_servos_with_hand(finger_status):
-    """Control Arduino servos based on hand finger positions"""
-    import sys
-    
-    # Intentar obtener el controlador directamente
-    try:
-        # Obtener módulo run.py
-        run_module = sys.modules.get('run')
-        if run_module and hasattr(run_module, 'arduino_controller'):
-            arduino_controller = run_module.arduino_controller
-            
-            if arduino_controller and arduino_controller.is_connected():
-                logger.info("Usando arduino_controller global directamente")
-                
-                # Map fingers to specific servos
-                servo_mapping = {
-                    "thumb": 2,
-                    "index": 3,
-                    "middle": 4,
-                    "ring": 5,
-                    "pinky": 6
-                }
-                
-                results = []
-                for finger, servo_id in servo_mapping.items():
-                    angle = 180 if finger_status[finger] else 0
-                    logger.info(f"GESTOS: Enviando comando para servo {servo_id} ({finger}) a {angle}°")
-                    success, message = arduino_controller.set_servo(servo_id, angle)
-                    logger.info(f"Resultado: {success} - {message}")
-                    results.append(success)
-                
-                return all(results)
-            else:
-                logger.warning("Controlador global existe pero no está conectado")
-        else:
-            logger.warning("No se pudo acceder al controlador global")
-    except Exception as e:
-        logger.error(f"Error accediendo al controlador global: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-    
-    # Fallback al sistema anterior
-    logger.warning("Fallback a bridge para control de servos")
-    from arduino_bridge import move_servo, is_connected
-    
-    connection_status = is_connected()
-    logger.info(f"Estado de conexión según bridge: {connection_status}")
-    
-    if not connection_status:
-        logger.warning("Arduino not connected for servo control")
-        return False
-    
-    try:
-        # Map fingers to specific servos
-        servo_mapping = {
-            "thumb": 2,    # Servo on pin 2
-            "index": 3,    # Servo on pin 3
-            "middle": 4,   # Servo on pin 4
-            "ring": 5,     # Servo on pin 5
-            "pinky": 6     # Servo on pin 6
-        }
-        
-        results = []
-        
-        # Set servo angles based on finger status
-        for finger, servo_id in servo_mapping.items():
-            angle = 180 if finger_status[finger] else 0
-            success = move_servo(servo_id, angle)
-            
-            if not success:
-                logger.error(f"Failed to set servo for {finger}")
-                results.append(False)
-            else:
-                logger.info(f"Set servo {servo_id} ({finger}) to {angle}°")
-                results.append(True)
-        
-        return all(results)
-    
-    except Exception as e:
-        logger.error(f"Error controlling servos: {str(e)}")
-        return False
-
 def process_frame(frame, hands):
-    """Process each frame using MediaPipe for hand tracking."""
-    global last_check_time, fingers_up
+    """Procesa cada fotograma usando MediaPipe para rastreo de manos."""
+    global last_check_time, fingers_up, arduino_controller
     
     if frame is None:
         return None
     
-    # Flip horizontally for a mirror effect
+    # Voltear horizontalmente para efecto espejo
     frame = cv2.flip(frame, 1)
     
-    # Convert the image from BGR to RGB for MediaPipe
+    # Convertir la imagen de BGR a RGB para MediaPipe
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     
-    # Process the frame with MediaPipe
+    # Procesar el fotograma con MediaPipe
     results = hands.process(rgb_frame)
     
-    # Draw hand landmarks on the image
+    # Dibujar landmarks de manos en la imagen
     if results.multi_hand_landmarks:
         for hand_landmarks in results.multi_hand_landmarks:
             mp_drawing.draw_landmarks(
@@ -231,22 +236,25 @@ def process_frame(frame, hands):
                 mp_drawing_styles.get_default_hand_connections_style()
             )
             
-            # Check fingers raised every 5 seconds
+            # Verificar dedos levantados cada 5 segundos
             current_time = time.time()
             if current_time - last_check_time >= finger_check_interval:
                 current_fingers = check_fingers_raised(hand_landmarks)
-                logger.info(f"Fingers raised: {', '.join([f for f, up in current_fingers.items() if up])}")
                 
-                # Control Arduino servos based on finger status
+                # Imprimir dedos levantados
+                raised_fingers = [f for f, up in current_fingers.items() if up]
+                logger.info(f"Fingers raised: {', '.join(raised_fingers)}")
+                
+                # Controlar servos Arduino basado en estado de dedos
                 control_result = control_servos_with_hand(current_fingers)
                 if control_result:
-                    logger.info("Successfully sent servo commands")
+                    logger.info("Comandos de servo enviados correctamente")
                 else:
                     logger.warning("Failed to send servo commands")
                 
                 last_check_time = current_time
     
-    # Display finger status on the frame
+    # Mostrar estado de dedos en el fotograma
     y_pos = 30
     with status_lock:
         for finger, is_up in fingers_up.items():
@@ -256,12 +264,12 @@ def process_frame(frame, hands):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
             y_pos += 30
     
-    # Display time until next check
+    # Mostrar tiempo hasta próxima verificación
     time_left = max(0, finger_check_interval - (time.time() - last_check_time))
     cv2.putText(frame, f"Next check in: {time_left:.1f}s", (10, y_pos), 
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
     
-    # Display connection status
+    # Mostrar estado de conexión
     y_pos += 30
     if arduino_controller and arduino_controller.is_connected():
         cv2.putText(frame, "Arduino: Connected", (10, y_pos), 
@@ -269,6 +277,13 @@ def process_frame(frame, hands):
     else:
         cv2.putText(frame, "Arduino: Disconnected", (10, y_pos), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+    
+    # Mostrar tipo de conexión si está disponible
+    if arduino_controller and arduino_controller.is_connected():
+        y_pos += 30
+        connection_type = "WiFi (ESP32)" if arduino_controller.use_tcp else "Serial USB"
+        cv2.putText(frame, f"Connection: {connection_type}", (10, y_pos), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
     
     return frame
 
