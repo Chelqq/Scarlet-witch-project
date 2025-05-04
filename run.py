@@ -34,15 +34,19 @@ Migrate(app, db)
 # Inicializar Socket.IO con el app de Flask
 socketio = SocketIO(app, cors_allowed_origins="*")
 app.config['SOCKETIO'] = socketio
+app.logger.info("Socket.IO inicializado en run.py")
 
 # Configurar el contexto global para video_processing
 from video_processing import set_app_context
 set_app_context(app, socketio)
+app.logger.info("Contexto de aplicación establecido en video_processing")
 
 # Registrar en el bridge
-from arduino_bridge import register_arduino_controller, register_socketio, set_connection_status
+from arduino_bridge import register_arduino_controller, register_socketio, set_connection_status, set_controller
 register_arduino_controller(arduino_controller)
+set_controller(arduino_controller)
 register_socketio(socketio)
+app.logger.info(f"Controlador Arduino registrado globalmente: {arduino_controller is not None}")
 
 # IMPORTANTE: Verifica primero si el controlador existe y está conectado
 if arduino_controller is not None and arduino_controller.is_connected():
@@ -403,6 +407,49 @@ def arduino_diagnostics():
             'message': str(e),
             'traceback': traceback.format_exc()
         }), 500
+
+@socketio.on('hand_gesture_servo')
+def handle_hand_gesture_servo(data):
+    """Maneja eventos de servo basados en gestos de mano"""
+    global arduino_controller
+    
+    app.logger.info(f'Recibido evento de gesto de mano para servo: {data}')
+    
+    if arduino_controller is None or not arduino_controller.is_connected():
+        app.logger.warning('Arduino no está conectado para procesar gesto de mano')
+        response = {
+            'status': 'error',
+            'message': 'Arduino no está conectado'
+        }
+    else:
+        try:
+            servo_id = int(data['servo_id'])
+            angle = int(data['angle'])
+            finger = data.get('finger', 'unknown')
+            
+            app.logger.info(f'Procesando gesto para {finger} - Servo {servo_id} a {angle}°')
+            
+            success, message = arduino_controller.set_servo(servo_id, angle)
+            
+            response = {
+                'status': 'success' if success else 'error',
+                'message': message,
+                'servo_id': servo_id,
+                'angle': angle,
+                'finger': finger
+            }
+            
+            app.logger.info(f'Resultado del gesto: {success} - {message}')
+        except Exception as e:
+            app.logger.error(f"Error al procesar gesto para servo: {str(e)}")
+            response = {
+                'status': 'error',
+                'message': f"Error: {str(e)}"
+            }
+    
+    # Emitimos resultado a todos los clientes
+    socketio.emit('hand_gesture_result', response)
+    return response
 
 if __name__ == "__main__":
     # Configurar logging

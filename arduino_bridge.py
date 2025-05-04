@@ -35,7 +35,6 @@ def set_connection_status(status):
         if old_status != status:
             logger.info(f"Estado de conexión bridge actualizado: {old_status} -> {status}")
 
-# Añadir esta función nueva
 def force_connection_status_check():
     """Fuerza una comprobación del estado de conexión real"""
     global _arduino_controller, _connected
@@ -128,3 +127,15 @@ def move_multiple_servos(servo_commands):
         results.append(success)
     
     return all(results)
+
+def set_controller(controller):
+    """Establece el controlador Arduino para uso global"""
+    global _arduino_controller
+    with _lock:
+        _arduino_controller = controller
+        logger.info(f"Controller establecido en bridge: {controller is not None}")
+
+def get_controller():
+    """Obtiene el controlador Arduino global"""
+    with _lock:
+        return _arduino_controller

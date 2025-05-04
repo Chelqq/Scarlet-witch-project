@@ -5,6 +5,29 @@ import threading
 import logging
 from apps.arduino.controller import arduino_controller, init_arduino
 
+def ensure_bridge_initialized():
+    """Asegura que el bridge está inicializado correctamente"""
+    from arduino_bridge import register_arduino_controller, set_controller
+    
+    # Intentar conseguir el controlador global
+    try:
+        import sys
+        run_module = sys.modules.get('run')
+        if run_module and hasattr(run_module, 'arduino_controller'):
+            ctrl = run_module.arduino_controller
+            if ctrl is not None:
+                logger.info("Registrando controlador desde run.py en bridge")
+                register_arduino_controller(ctrl)
+                set_controller(ctrl)
+                return True
+    except Exception as e:
+        logger.error(f"Error al inicializar bridge: {str(e)}")
+    
+    return False
+
+# Llamar a esta función de inicialización al cargar el módulo
+ensure_bridge_initialized()
+
 DISABLE_AUTO_CONNECT = True  # Nueva bandera global
 
 # Variables globales compartidas
@@ -46,6 +69,17 @@ def set_app_context(app, socketio):
         socketio_instance = socketio
         if 'ARDUINO_CONNECTION' in app.config:
             connection_info = app.config['ARDUINO_CONNECTION']
+        
+        logger.info(f"Contexto inicializado en video_processing: app={app is not None}, socketio={socketio is not None}")
+        
+        # Verificar que socketio_instance es válido
+        if socketio_instance is not None:
+            try:
+                # Probar emisión de evento para verificar que funciona
+                socketio_instance.emit('video_processing_initialized', {'status': 'success'})
+                logger.info("Socket.IO inicializado correctamente en video_processing")
+            except Exception as e:
+                logger.error(f"Error al verificar Socket.IO en video_processing: {str(e)}")
 
 def initialize_arduino_for_video():
     """Ensure Arduino controller is properly initialized for video processing"""
@@ -130,52 +164,78 @@ def check_fingers_raised(hand_landmarks):
     }
 
 def control_servos_with_hand(finger_status):
-    """Control Arduino servos based on hand finger positions using Socket.IO events"""
-    global socketio_instance
+    """Control servos using the same mechanism as pre-programmed sequences"""
+    # Obtener controlador desde el bridge (evitamos sys.modules)
+    from arduino_bridge import get_controller
     
-    # Verificar si tenemos instancia de Socket.IO disponible
-    if socketio_instance is None:
-        logger.error("Socket.IO no inicializado en video_processing")
+    arduino_controller = get_controller()
+    
+    if not arduino_controller:
+        logger.error("Controlador Arduino no disponible en bridge")
         return False
     
-    try:
-        # Mapeo de dedos a servos específicos
-        servo_mapping = {
-            "thumb": 2,    # Servo en pin 2
-            "index": 3,    # Servo en pin 3
-            "middle": 4,   # Servo en pin 4
-            "ring": 5,     # Servo en pin 5
-            "pinky": 6     # Servo en pin 6
-        }
-        
-        # Log para depuración
-        logger.info(f"GESTOS: Enviando eventos para {len(servo_mapping)} servos basados en gestos vía Socket.IO")
-        
-        results = []
-        
-        # Enviar comandos de servo basados en estado de dedos
-        for finger, servo_id in servo_mapping.items():
-            angle = 180 if finger_status[finger] else 0
-            logger.info(f"GESTOS: Emitiendo evento Socket.IO para servo {servo_id} ({finger}) a {angle}°")
-            
-            # Emitir evento a través de Socket.IO
-            try:
-                # Este evento será capturado por todos los clientes y el servidor
-                socketio_instance.emit('hand_gesture_servo', {
-                    'servo_id': servo_id,
-                    'angle': angle,
-                    'finger': finger
-                })
-                logger.info(f"Evento Socket.IO emitido correctamente para {finger}")
-                results.append(True)
-            except Exception as e:
-                logger.error(f"Error al emitir evento Socket.IO para {finger}: {str(e)}")
-                results.append(False)
-        
-        return all(results)
+    # Verificar conexión
+    if not arduino_controller.is_connected():
+        logger.warning("Arduino no conectado, intentando conectar...")
+        try:
+            connected = arduino_controller.connect()
+            if not connected:
+                logger.error("No se pudo conectar con Arduino")
+                return False
+            logger.info("Conexión con Arduino establecida")
+        except Exception as e:
+            logger.error(f"Error al conectar con Arduino: {str(e)}")
+            return False
     
+    # Mapeo de dedos a servos
+    servo_mapping = {
+        "thumb": 2,    # Servo en pin 2
+        "index": 3,    # Servo en pin 3
+        "middle": 4,   # Servo en pin 4
+        "ring": 5,     # Servo en pin 5
+        "pinky": 6     # Servo en pin 6
+    }
+    
+    # Crear lista de comandos en el mismo formato que las secuencias
+    commands = []
+    for finger, servo_id in servo_mapping.items():
+        angle = 180 if finger_status[finger] else 0
+        commands.append({
+            'servo_id': servo_id,
+            'angle': angle,
+            'delay': 0.1  # 100ms entre comandos
+        })
+    
+    logger.info(f"GESTOS: Creados {len(commands)} comandos para servos")
+    
+    try:
+        # Usar el mismo método que las secuencias
+        if hasattr(arduino_controller, 'run_sequence'):
+            logger.info("Ejecutando gestos con método run_sequence")
+            success, messages = arduino_controller.run_sequence(commands)
+            logger.info(f"Resultado: {success}, Mensajes: {str(messages)[:100]}")
+        else:
+            # Fallback: usar set_servo individual como en las secuencias
+            logger.info("Ejecutando gestos con método set_servo individual")
+            success = True
+            for cmd in commands:
+                logger.info(f"Enviando comando: Servo {cmd['servo_id']} a {cmd['angle']}°")
+                result, message = arduino_controller.set_servo(cmd['servo_id'], cmd['angle'])
+                logger.info(f"Resultado: {result}, Mensaje: {message}")
+                if not result:
+                    success = False
+                import time
+                time.sleep(cmd['delay'])
+        
+        if success:
+            logger.info("Control por gestos ejecutado correctamente")
+        else:
+            logger.warning("Error al ejecutar control por gestos")
+        
+        return success
+        
     except Exception as e:
-        logger.error(f"Error controlando servos por gestos: {str(e)}")
+        logger.error(f"Error al controlar servos: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         return False
@@ -183,6 +243,10 @@ def control_servos_with_hand(finger_status):
 def process_frame(frame, hands):
     """Process each frame using MediaPipe for hand tracking."""
     global last_check_time, fingers_up
+    
+    current_time = time.time()
+    if current_time - last_check_time >= 10:  # Cada 10 segundos
+        ensure_bridge_initialized()
     
     if frame is None:
         return None
