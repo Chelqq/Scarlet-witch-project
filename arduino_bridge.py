@@ -30,8 +30,22 @@ def set_connection_status(status):
     """Establece el estado de conexión"""
     global _connected
     with _lock:
+        old_status = _connected
         _connected = status
-        logger.info(f"Estado de conexión establecido en: {status}")
+        if old_status != status:
+            logger.info(f"Estado de conexión bridge actualizado: {old_status} -> {status}")
+
+# Añadir esta función nueva
+def force_connection_status_check():
+    """Fuerza una comprobación del estado de conexión real"""
+    global _arduino_controller, _connected
+    
+    if _arduino_controller is not None:
+        is_really_connected = _arduino_controller.is_connected()
+        set_connection_status(is_really_connected)
+        logger.info(f"Verificación forzada de conexión: {is_really_connected}")
+        return is_really_connected
+    return False
 
 def is_connected():
     """Retorna el estado de conexión real del controlador"""
