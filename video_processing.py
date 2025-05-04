@@ -7,9 +7,14 @@ from apps.arduino.controller import arduino_controller, init_arduino
 
 DISABLE_AUTO_CONNECT = True  # Nueva bandera global
 
-
+# Variables globales compartidas
+app_instance = None
+socketio_instance = None
+connection_info = None
+lock = threading.RLock()
 # Configure logger
 logger = logging.getLogger(__name__)
+
 
 # Initialize MediaPipe for hand tracking
 mp_hands = mp.solutions.hands
@@ -33,124 +38,47 @@ status_lock = threading.RLock()
 # Flag to track if Arduino has been initialized for video processing
 arduino_initialized = False
 
-# Modificación a la función initialize_arduino_for_video en video_processing.py
+def set_app_context(app, socketio):
+    """Establece el contexto de la aplicación Flask de forma global"""
+    global app_instance, socketio_instance, connection_info
+    with lock:
+        app_instance = app
+        socketio_instance = socketio
+        if 'ARDUINO_CONNECTION' in app.config:
+            connection_info = app.config['ARDUINO_CONNECTION']
+
 
 def initialize_arduino_for_video():
     """Ensure Arduino controller is properly initialized for video processing"""
-    global arduino_initialized, arduino_controller
+    global arduino_initialized, arduino_controller, connection_info
     
-    # PRIMERO: verificar si debemos omitir la conexión automática
-    if DISABLE_AUTO_CONNECT:
-        logger.info("Conexión automática desactivada, usando controlador existente sin reconectar")
-        arduino_initialized = True
-        return True
-    
-    # Si ya está inicializado, no hacer nada
     if arduino_initialized:
         return True
-        
+    
     try:
-        try:
-            from flask import current_app
-            if hasattr(current_app, 'config') and 'ARDUINO_CONNECTION' in current_app.config:
-                connection_info = current_app.config['ARDUINO_CONNECTION']
-                logger.info(f"Usando información de conexión existente: {connection_info}")
-                
-                # Si ya hay una conexión activa por WebSocket, USARLA y no intentar reconectar
-                if connection_info.get('is_connected', False):
-                    logger.info("Usando conexión WebSocket existente")
-                    arduino_initialized = True
-                    return True
-        except Exception as e:
-            logger.warning(f"No se pudo obtener información de conexión WebSocket: {str(e)}")
-        
-        # Importante: VERIFICAR si el controlador ya existe y ESTÁ CONECTADO
+        # Verificar si el controlador ya existe y está conectado
         if arduino_controller is not None and arduino_controller.is_connected():
             logger.info("Arduino ya está conectado, usando conexión existente")
             arduino_initialized = True
             return True
             
-        # Si existe pero no está conectado, intentar reconectar con la configuración actual
-        if arduino_controller is not None:
-            logger.info("Arduino controller existe pero no está conectado, intentando reconectar")
-            # Intentar reconectar con la configuración actual
-            if arduino_controller.connect():
-                arduino_initialized = True
-                logger.info(f"Reconectado exitosamente a Arduino: {arduino_controller.use_tcp}")
-                return True
+        # Verificar información de conexión global
+        with lock:
+            current_connection = connection_info
             
-        # Sólo si no hay un controlador o falló la reconexión, inicializar uno nuevo
-        if arduino_controller is None:
-            # Verificar en flask.current_app si hay información sobre conexiones WebSocket
-            try:
-                from flask import current_app
-                if hasattr(current_app, 'config') and 'ARDUINO_CONNECTION' in current_app.config:
-                    connection_info = current_app.config['ARDUINO_CONNECTION']
-                    logger.info(f"Usando información de conexión existente: {connection_info}")
-                    
-                    if connection_info.get('is_connected', False):
-                        if connection_info.get('connection_type') == 'wifi':
-                            # Usar conexión WiFi
-                            arduino_controller = init_arduino(
-                                host=connection_info.get('host'),
-                                tcp_port=connection_info.get('port', 8888),
-                                use_tcp=True,
-                                connect_now=True
-                            )
-                            logger.info(f"Inicializado con conexión WiFi: {connection_info.get('host')}")
-                        else:
-                            # Usar conexión serial
-                            arduino_controller = init_arduino(
-                                serial_port=connection_info.get('serial_port', 'COM12'),
-                                connect_now=True
-                            )
-                            logger.info(f"Inicializado con conexión serial: {connection_info.get('serial_port')}")
-                        
-                        if arduino_controller and arduino_controller.is_connected():
-                            arduino_initialized = True
-                            return True
-            except Exception as e:
-                logger.warning(f"No se pudo obtener información de conexión desde Flask: {str(e)}")
+        if current_connection is not None and current_connection.get('is_connected', False):
+            logger.info(f"Usando información de conexión global: {current_connection}")
+            arduino_initialized = True
+            return True
             
-            # Si no hay información de conexión previa, usar detección automática
-            logger.info("No hay información de conexión previa, usando detección automática")
-            from serial.tools.list_ports import comports
-            available_ports = [p.device for p in comports()]
-            
-            if not available_ports:
-                logger.error("No se encontraron puertos seriales disponibles")
-                return False
-            
-            # Usar el primer puerto disponible
-            port_to_use = available_ports[0]
-            logger.info(f"Usando puerto serial detectado automáticamente: {port_to_use}")
-            
-            arduino_controller = init_arduino(
-                serial_port=port_to_use,
-                connect_now=False  # Cambiado a False para no conectar automáticamente
-            )
-        
-        # En este punto, solo conectar si el usuario lo ha solicitado explícitamente
-        # a través de la interfaz WebSocket o si no hay interfaz WebSocket disponible
-        if arduino_controller and not arduino_controller.is_connected():
-            try:
-                from flask import current_app
-                if not hasattr(current_app, 'config') or 'SOCKETIO' not in current_app.config:
-                    # Si no hay SocketIO, conectar directamente
-                    logger.info("No hay WebSocket, conectando directamente")
-                    arduino_controller.connect()
-                else:
-                    # Si hay SocketIO, no conectar automáticamente
-                    logger.info("WebSocket disponible, no conectando automáticamente")
-            except Exception:
-                # Si hay algún error, intentar conectar como último recurso
-                arduino_controller.connect()
-        
+        # No intentar conectar de nuevo, sólo marcar como inicializado
+        logger.info("No hay información de conexión disponible, marcando como inicializado sin conectar")
         arduino_initialized = True
-        return arduino_controller.is_connected()
+        return True
         
     except Exception as e:
         logger.error(f"Error initializing Arduino for video: {str(e)}")
+        arduino_initialized = True  # Marcamos como inicializado para evitar reintento
         return False
 
 def check_fingers_raised(hand_landmarks):
@@ -196,19 +124,58 @@ def check_fingers_raised(hand_landmarks):
 
 def control_servos_with_hand(finger_status):
     """Control Arduino servos based on hand finger positions"""
-    global arduino_controller
+    import sys
     
-    # Only attempt to initialize once
-    if not arduino_initialized:
-        initialize_arduino_for_video()
+    # Intentar obtener el controlador directamente
+    try:
+        # Obtener módulo run.py
+        run_module = sys.modules.get('run')
+        if run_module and hasattr(run_module, 'arduino_controller'):
+            arduino_controller = run_module.arduino_controller
+            
+            if arduino_controller and arduino_controller.is_connected():
+                logger.info("Usando arduino_controller global directamente")
+                
+                # Map fingers to specific servos
+                servo_mapping = {
+                    "thumb": 2,
+                    "index": 3,
+                    "middle": 4,
+                    "ring": 5,
+                    "pinky": 6
+                }
+                
+                results = []
+                for finger, servo_id in servo_mapping.items():
+                    angle = 180 if finger_status[finger] else 0
+                    logger.info(f"GESTOS: Enviando comando para servo {servo_id} ({finger}) a {angle}°")
+                    success, message = arduino_controller.set_servo(servo_id, angle)
+                    logger.info(f"Resultado: {success} - {message}")
+                    results.append(success)
+                
+                return all(results)
+            else:
+                logger.warning("Controlador global existe pero no está conectado")
+        else:
+            logger.warning("No se pudo acceder al controlador global")
+    except Exception as e:
+        logger.error(f"Error accediendo al controlador global: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
     
-    # Skip if no Arduino controller or not connected
-    if not arduino_controller or not arduino_controller.is_connected():
+    # Fallback al sistema anterior
+    logger.warning("Fallback a bridge para control de servos")
+    from arduino_bridge import move_servo, is_connected
+    
+    connection_status = is_connected()
+    logger.info(f"Estado de conexión según bridge: {connection_status}")
+    
+    if not connection_status:
         logger.warning("Arduino not connected for servo control")
         return False
     
     try:
-        # Map fingers to specific servos - adjust servo IDs as needed for your setup
+        # Map fingers to specific servos
         servo_mapping = {
             "thumb": 2,    # Servo on pin 2
             "index": 3,    # Servo on pin 3
@@ -219,19 +186,19 @@ def control_servos_with_hand(finger_status):
         
         results = []
         
-        # Set servo angles based on finger status (0° if down, 180° if up)
+        # Set servo angles based on finger status
         for finger, servo_id in servo_mapping.items():
             angle = 180 if finger_status[finger] else 0
-            success, message = arduino_controller.set_servo(servo_id, angle)
+            success = move_servo(servo_id, angle)
             
             if not success:
-                logger.error(f"Failed to set servo for {finger}: {message}")
+                logger.error(f"Failed to set servo for {finger}")
                 results.append(False)
             else:
-                logger.debug(f"Set servo {servo_id} ({finger}) to {angle}°")
+                logger.info(f"Set servo {servo_id} ({finger}) to {angle}°")
                 results.append(True)
         
-        return all(results)  # Return True only if all servos were set successfully
+        return all(results)
     
     except Exception as e:
         logger.error(f"Error controlling servos: {str(e)}")
@@ -369,11 +336,9 @@ def gen_video_feed(camera_id):
             cap.release()
 
 def create_error_frame(message):
+    from numpy import uint8 as np
     """Create a frame with error message when camera is not available"""
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
     cv2.putText(frame, "Camera Error", (200, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
     cv2.putText(frame, message, (100, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
     return frame
-
-# Ensure numpy is imported
-import numpy as np

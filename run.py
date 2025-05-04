@@ -1,15 +1,16 @@
 # Modificación a run.py para añadir soporte WebSocket
 
 import os
+from flask import Response
 from flask_migrate import Migrate
 from flask_minify import Minify
-from sys import exit
-from flask import Response
-import logging
 from flask_socketio import SocketIO
+from sys import exit
+import logging
+from flask import jsonify
 
-from apps.config import config_dict
 from apps import create_app, db
+from apps.config import config_dict
 from apps.arduino.controller import arduino_controller, init_arduino
 
 # Importamos las funciones desde el archivo video_processing.py
@@ -33,6 +34,22 @@ Migrate(app, db)
 # Inicializar Socket.IO con el app de Flask
 socketio = SocketIO(app, cors_allowed_origins="*")
 app.config['SOCKETIO'] = socketio
+
+# Configurar el contexto global para video_processing
+from video_processing import set_app_context
+set_app_context(app, socketio)
+
+# Registrar en el bridge
+from arduino_bridge import register_arduino_controller, register_socketio, set_connection_status
+register_arduino_controller(arduino_controller)
+register_socketio(socketio)
+
+# IMPORTANTE: Verifica primero si el controlador existe y está conectado
+if arduino_controller is not None and arduino_controller.is_connected():
+    app.logger.info("Arduino conectado, estableciendo estado en bridge")
+    set_connection_status(True)
+else:
+    app.logger.info("Arduino desconectado, estado en bridge permanece False")
 
 # Variable global para mantener el estado de conexión de Arduino
 arduino_connection = {
@@ -134,6 +151,10 @@ def handle_connect_arduino(data):
             
             if success:
                 # Actualizar estado de conexión global
+                from arduino_bridge import set_connection_status
+                set_connection_status(True)
+                app.logger.info("Estado de conexión en bridge actualizado a CONECTADO")
+                
                 arduino_connection['is_connected'] = True
                 arduino_connection['connection_type'] = 'wifi' if use_tcp else 'serial'
                 
@@ -151,6 +172,9 @@ def handle_connect_arduino(data):
                 # IMPORTANTE: Actualizar la configuración de la aplicación
                 app.config['ARDUINO_CONNECTION'] = arduino_connection
             else:
+                from arduino_bridge import set_connection_status
+                set_connection_status(False)
+                app.logger.info("Estado de conexión en bridge actualizado a DESCONECTADO")
                 message = "No se pudo conectar con el dispositivo"
     
     except Exception as e:
@@ -323,6 +347,63 @@ def handle_get_connection_status(sid=None):  # Añadir el parámetro sid
         arduino_connection['is_connected'] = False
     
     return arduino_connection
+
+@app.route('/test_servo/<int:servo_id>/<int:angle>')
+def test_servo(servo_id, angle):
+    """Endpoint para probar el envío directo de comandos a servos"""
+    global arduino_controller
+    
+    if arduino_controller is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'Arduino controller no inicializado'
+        }), 400
+        
+    if not arduino_controller.is_connected():
+        return jsonify({
+            'status': 'error',
+            'message': 'Arduino no conectado'
+        }), 400
+    
+    try:
+        success, message = arduino_controller.set_servo(servo_id, angle)
+        
+        return jsonify({
+            'status': 'success' if success else 'error',
+            'message': message,
+            'servo_id': servo_id,
+            'angle': angle
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+@app.route('/arduino_diagnostics')
+def arduino_diagnostics():
+    """Obtiene diagnóstico detallado del estado del Arduino"""
+    global arduino_controller
+    
+    if arduino_controller is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'Arduino controller no inicializado'
+        }), 400
+    
+    # Obtener diagnóstico del controlador
+    try:
+        diagnostics = arduino_controller.get_diagnostics()
+        return jsonify(diagnostics)
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
 
 if __name__ == "__main__":
     # Configurar logging

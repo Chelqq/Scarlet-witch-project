@@ -259,8 +259,10 @@ class ArduinoController:
             if not self.connect():
                 return False, "No se pudo conectar al dispositivo"
 
+        # ATENCIÓN: El formato debe ser exactamente el que el Arduino espera
+        # Según el código Arduino, espera: "servo_id,angle\n"
         command = f"{servo_id},{angle}\n"
-        logging.debug(f"Enviando comando: {command}")
+        logging.debug(f"Enviando comando raw: {command.encode()}")
         
         # Timeout para adquirir el lock (evita bloqueos indefinidos)
         lock_acquired = self.lock.acquire(timeout=1.0)
@@ -275,13 +277,15 @@ class ArduinoController:
             if self.use_tcp:
                 # Enviar por TCP con timeout
                 try:
+                    logging.info(f"Enviando comando TCP: {command}")
                     self.socket.settimeout(0.7)  # 700ms timeout
-                    self.socket.sendall(command.encode())
+                    bytes_sent = self.socket.sendall(command.encode())
+                    logging.debug(f"Bytes enviados: {bytes_sent}")
                     
                     # Non-blocking response check with timeout
                     try:
                         response = self.socket.recv(1024).decode().strip()
-                        logging.debug(f"Respuesta del ESP32: {response}")
+                        logging.info(f"Respuesta del ESP32: {response}")
                     except Exception as e:
                         logging.debug(f"No se recibió respuesta del ESP32: {str(e)}")
                         
@@ -296,8 +300,10 @@ class ArduinoController:
                     if not self.arduino or not self.arduino.is_open:
                         return False, "Puerto serial no disponible"
                         
+                    logging.info(f"Enviando comando Serial: {command}")
                     self.arduino.reset_input_buffer()
-                    self.arduino.write(command.encode())
+                    bytes_written = self.arduino.write(command.encode())
+                    logging.debug(f"Bytes escritos: {bytes_written}")
                     
                     # Non-blocking response check with timeout
                     start_time = time.time()
@@ -306,6 +312,7 @@ class ArduinoController:
                     while (time.time() - start_time) < 0.5:
                         if self.arduino.in_waiting > 0:
                             response = self.arduino.readline().decode().strip()
+                            logging.info(f"Respuesta del Arduino: {response}")
                             break
                         time.sleep(0.01)  # Más pequeño para ser más reactivo
                 
@@ -472,6 +479,24 @@ class ArduinoController:
         
     # Aplica los parches cuando se importa este módulo
     #patch_arduino_controller()
+    def get_diagnostics(self):
+        """Obtiene diagnóstico del estado del controlador"""
+        diagnostics = {
+            "configuracion_actual": {
+                "modo_conexion": "TCP/IP" if self.use_tcp else "Serial",
+                "puerto_configurado": self.serial_port if self.serial_port else "No configurado",
+                "host_tcp": self.host if self.host else "No configurado",
+                "puerto_tcp": self.tcp_port if self.use_tcp else "N/A",
+                "baud_rate": self.baud_rate,
+                "estado_conexion": "Conectado" if self.is_connected() else "Desconectado"
+            },
+            "puertos_disponibles": self.get_available_ports() if hasattr(self, 'get_available_ports') else [],
+            "info_adicional": {
+                "tiempo_ultimo_comando": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.last_command_time)) if hasattr(self, 'last_command_time') else "N/A"
+            }
+        }
+        
+        return diagnostics
 
 # Singleton para usar en toda la aplicación
 arduino_controller = None
