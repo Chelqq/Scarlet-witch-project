@@ -225,7 +225,7 @@ def handle_set_servo(data):
     return response
 
 @socketio.on('reset_servos')
-def handle_reset_servos():
+def handle_reset_servos(data=None):  # Ahora acepta un parámetro
     global arduino_controller
     
     if arduino_controller is None or not arduino_controller.is_connected():
