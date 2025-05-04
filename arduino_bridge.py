@@ -18,11 +18,6 @@ def register_arduino_controller(controller):
     with _lock:
         _arduino_controller = controller
         logger.info("Arduino controller registrado en bridge")
-        
-        # IMPORTANTE: Verificar inmediatamente el estado de conexión
-        if controller is not None and controller.is_connected():
-            set_connection_status(True)
-            logger.info("Estado de conexión actualizado automáticamente a CONECTADO")
     
 def register_socketio(socketio_instance):
     """Registra la instancia de Socket.IO para uso global"""
@@ -40,52 +35,36 @@ def set_connection_status(status):
 
 def is_connected():
     """Retorna el estado de conexión real del controlador"""
-    global _arduino_controller, _connected
-    
     with _lock:
         controller = _arduino_controller
+        connected = _connected
     
     # Verificar el estado real del controlador, no solo la bandera
-    if controller is not None:
-        try:
-            # CAMBIO: Verificar la conexión directamente, sin confiar en la bandera
-            is_actually_connected = controller.is_connected()
-            
-            # CAMBIO: Actualizar la bandera si no coincide con el estado real
-            if is_actually_connected != _connected:
-                set_connection_status(is_actually_connected)
-                logger.info(f"Estado de conexión sincronizado a {is_actually_connected} según estado real")
-            
-            return is_actually_connected
-        except Exception as e:
-            logger.error(f"Error verificando estado de conexión: {str(e)}")
-            set_connection_status(False)
-            return False
+    if controller is not None and controller.is_connected():
+        # Si el controlador está conectado pero la bandera dice lo contrario, actualizar la bandera
+        if not connected:
+            set_connection_status(True)
+        return True
     else:
-        # Si no hay controlador, no puede estar conectado
-        if _connected:
+        # Si el controlador no está conectado pero la bandera dice lo contrario, actualizar la bandera
+        if connected:
             set_connection_status(False)
         return False
 
 def move_servo(servo_id, angle):
     """Mueve un servo usando el controlador o Socket.IO, según disponibilidad"""
-    global _arduino_controller, _socketio, _connected
+    with _lock:
+        controller = _arduino_controller
+        socketio = _socketio
+        connected = _connected
     
-    # CAMBIO: Verificar siempre la conexión real primero
-    connection_status = is_connected()
-    
-    # Si no está conectado según la verificación, no intentar mover el servo
-    if not connection_status:
+    if not connected:
         logger.warning(f"Intento de mover servo {servo_id} sin conexión activa")
         return False
     
     try:
-        with _lock:
-            controller = _arduino_controller
-            socketio = _socketio
-        
         # Intentar primero con controlador directo
-        if controller is not None:
+        if controller is not None and controller.is_connected():
             logger.info(f"COMANDO: Moviendo servo {servo_id} a {angle}° con controlador directo")
             
             # Imprimir detalles del controlador para debug

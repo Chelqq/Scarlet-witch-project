@@ -8,23 +8,13 @@ from flask_socketio import SocketIO
 from sys import exit
 import logging
 from flask import jsonify
-from video_processing import gen_video_feed, set_app_context
-from arduino_bridge import register_arduino_controller, register_socketio, set_connection_status
-
-global arduino_controller
-
-# Asegurarse de inicializar el logger
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-
 
 from apps import create_app, db
 from apps.config import config_dict
 from apps.arduino.controller import arduino_controller, init_arduino
+
+# Importamos las funciones desde el archivo video_processing.py
+from video_processing import gen_video_feed
 
 # WARNING: Don't run with debug turned on in production!
 DEBUG = (os.getenv('DEBUG', 'False') == 'True')
@@ -37,65 +27,29 @@ try:
     app_config = config_dict[get_config_mode.capitalize()]
 except KeyError:
     exit('Error: Invalid <config_mode>. Expected values [Debug, Production] ')
-    
-#-----------------------
+
 app = create_app(app_config)
 Migrate(app, db)
-#--------------------
 
 # Inicializar Socket.IO con el app de Flask
 socketio = SocketIO(app, cors_allowed_origins="*")
 app.config['SOCKETIO'] = socketio
 
+# Configurar el contexto global para video_processing
+from video_processing import set_app_context
 set_app_context(app, socketio)
 
-if 'arduino_controller' not in globals() or arduino_controller is None:
-    from apps.arduino.controller import init_arduino
-    logger.info("Inicializando controlador Arduino global")
-    
-    # Parámetros por defecto, ajustar según tu configuración
-    arduino_controller = init_arduino(
-        serial_port="COM12",  # Ajustar según tu configuración
-        baud_rate=9600,
-        use_tcp=False,
-        host=None, 
-        tcp_port=8888
-    )
-    
-    if arduino_controller is not None:
-        logger.info("Controlador Arduino inicializado exitosamente")
-        
-        # Intentar conectar inmediatamente
-        try:
-            logger.info("Intentando conectar Arduino durante inicialización")
-            connect_success = arduino_controller.connect()
-            logger.info(f"Resultado de conexión inicial: {connect_success}")
-        except Exception as e:
-            logger.error(f"Error conectando durante inicialización: {str(e)}")
-    else:
-        logger.error("No se pudo inicializar el controlador Arduino")
-
-
 # Registrar en el bridge
+from arduino_bridge import register_arduino_controller, register_socketio, set_connection_status
 register_arduino_controller(arduino_controller)
 register_socketio(socketio)
 
 # IMPORTANTE: Verifica primero si el controlador existe y está conectado
-if arduino_controller is not None:
-    # Intentar reconectar una vez con la configuración actual si no está conectado
-    if not arduino_controller.is_connected():
-        app.logger.info("Intentando conectar Arduino durante inicialización...")
-        connect_success = arduino_controller.connect()
-        app.logger.info(f"Resultado de conexión inicial: {connect_success}")
-    
-    # Verificar nuevamente el estado
-    if arduino_controller.is_connected():
-        app.logger.info("Arduino conectado, estableciendo estado en bridge")
-        set_connection_status(True)
-    else:
-        app.logger.info("Arduino desconectado, estado en bridge permanece False")
+if arduino_controller is not None and arduino_controller.is_connected():
+    app.logger.info("Arduino conectado, estableciendo estado en bridge")
+    set_connection_status(True)
 else:
-    app.logger.info("Arduino controller no inicializado, estado en bridge permanece False")
+    app.logger.info("Arduino desconectado, estado en bridge permanece False")
 
 # Variable global para mantener el estado de conexión de Arduino
 arduino_connection = {
@@ -126,63 +80,6 @@ def video_feed_0():
 def video_feed_1():
     return Response(gen_video_feed(0), # si, asi aparecen en orden
                     mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/test_servo/<int:servo_id>/<int:angle>')
-def test_servo(servo_id, angle):
-    """Endpoint para probar el envío directo de comandos a servos"""
-    global arduino_controller
-    
-    if arduino_controller is None:
-        return jsonify({
-            'status': 'error',
-            'message': 'Arduino controller no inicializado'
-        }), 400
-        
-    if not arduino_controller.is_connected():
-        return jsonify({
-            'status': 'error',
-            'message': 'Arduino no conectado'
-        }), 400
-    
-    try:
-        success, message = arduino_controller.set_servo(servo_id, angle)
-        
-        return jsonify({
-            'status': 'success' if success else 'error',
-            'message': message,
-            'servo_id': servo_id,
-            'angle': angle
-        })
-    except Exception as e:
-        import traceback
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
-
-@app.route('/arduino_diagnostics')
-def arduino_diagnostics():
-    """Obtiene diagnóstico detallado del estado del Arduino"""
-    global arduino_controller
-    
-    if arduino_controller is None:
-        return jsonify({
-            'status': 'error',
-            'message': 'Arduino controller no inicializado'
-        }), 400
-    
-    # Obtener diagnóstico del controlador
-    try:
-        diagnostics = arduino_controller.get_diagnostics()
-        return jsonify(diagnostics)
-    except Exception as e:
-        import traceback
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
 
 # Manejadores de eventos Socket.IO
 @socketio.on('connect')
@@ -295,18 +192,12 @@ def handle_connect_arduino(data):
     return response
 
 @socketio.on('set_servo')
-def handle_set_servo(data, sid=None):
+def handle_set_servo(data):
     global arduino_controller
     
-    app.logger.info(f'Solicitud para controlar servo vía Socket.IO: {data}, sid={sid}')
-    
-    # Para llamadas desde código Python, asegurar que sid sea None
-    if sid is None:
-        app.logger.info("Llamada interna desde Python detectada")
+    app.logger.info(f'Solicitud para controlar servo: {data}')
     
     if arduino_controller is None or not arduino_controller.is_connected():
-        app.logger.warning("Arduino no conectado para comando Socket.IO")
-        app.logger.info(f"Estado del controlador: {arduino_controller is not None}, conectado={arduino_controller.is_connected() if arduino_controller else False}")
         response = {
             'status': 'error',
             'message': 'Arduino no está conectado'
@@ -316,15 +207,7 @@ def handle_set_servo(data, sid=None):
             servo_id = int(data['servo_id'])
             angle = int(data['angle'])
             
-            # Imprimir estado del controlador para debug
-            app.logger.info(f"Estado del controlador: use_tcp={arduino_controller.use_tcp}, connected={arduino_controller.is_connected()}")
-            if arduino_controller.use_tcp:
-                app.logger.info(f"TCP info: host={arduino_controller.host}, port={arduino_controller.tcp_port}")
-            else:
-                app.logger.info(f"Serial info: port={arduino_controller.serial_port}, baud_rate={arduino_controller.baud_rate}")
-            
             success, message = arduino_controller.set_servo(servo_id, angle)
-            app.logger.info(f"Resultado de comando directo: {success}, {message}")
             
             response = {
                 'status': 'success' if success else 'error',
@@ -333,9 +216,7 @@ def handle_set_servo(data, sid=None):
                 'angle': angle
             }
         except Exception as e:
-            import traceback
-            app.logger.error(f"Error al controlar servo vía Socket.IO: {str(e)}")
-            app.logger.error(traceback.format_exc())
+            app.logger.error(f"Error al controlar servo: {str(e)}")
             response = {
                 'status': 'error',
                 'message': f"Error: {str(e)}"
@@ -344,7 +225,7 @@ def handle_set_servo(data, sid=None):
     return response
 
 @socketio.on('reset_servos')
-def handle_reset_servos(sid=None):  # Añadido parámetro sid
+def handle_reset_servos():
     global arduino_controller
     
     if arduino_controller is None or not arduino_controller.is_connected():
@@ -372,7 +253,7 @@ def handle_reset_servos(sid=None):  # Añadido parámetro sid
     return response
 
 @socketio.on('run_sequence')
-def handle_run_sequence(data, sid=None):  # Añadido parámetro sid
+def handle_run_sequence(data):
     global arduino_controller
     
     if arduino_controller is None:
@@ -455,7 +336,7 @@ def handle_run_sequence(data, sid=None):  # Añadido parámetro sid
     return response
 
 @socketio.on('get_connection_status')
-def handle_get_connection_status(sid=None):  # Ya tenía el parámetro sid
+def handle_get_connection_status(sid=None):  # Añadir el parámetro sid
     """Maneja la solicitud de estado de conexión desde el cliente"""
     global arduino_controller, arduino_connection
     
@@ -467,7 +348,63 @@ def handle_get_connection_status(sid=None):  # Ya tenía el parámetro sid
     
     return arduino_connection
 
+@app.route('/test_servo/<int:servo_id>/<int:angle>')
+def test_servo(servo_id, angle):
+    """Endpoint para probar el envío directo de comandos a servos"""
+    global arduino_controller
     
+    if arduino_controller is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'Arduino controller no inicializado'
+        }), 400
+        
+    if not arduino_controller.is_connected():
+        return jsonify({
+            'status': 'error',
+            'message': 'Arduino no conectado'
+        }), 400
+    
+    try:
+        success, message = arduino_controller.set_servo(servo_id, angle)
+        
+        return jsonify({
+            'status': 'success' if success else 'error',
+            'message': message,
+            'servo_id': servo_id,
+            'angle': angle
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+@app.route('/arduino_diagnostics')
+def arduino_diagnostics():
+    """Obtiene diagnóstico detallado del estado del Arduino"""
+    global arduino_controller
+    
+    if arduino_controller is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'Arduino controller no inicializado'
+        }), 400
+    
+    # Obtener diagnóstico del controlador
+    try:
+        diagnostics = arduino_controller.get_diagnostics()
+        return jsonify(diagnostics)
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
 if __name__ == "__main__":
     # Configurar logging
     logging.basicConfig(
@@ -475,13 +412,6 @@ if __name__ == "__main__":
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     logger = logging.getLogger(__name__)
-    
-    # AÑADIR ESTA LÍNEA AQUÍ
-    # Exportar el controlador Arduino al espacio global para facilitar acceso desde otros módulos
-    import builtins
-    setattr(builtins, 'global_arduino_controller', arduino_controller)
-    logger.info(f"Controlador Arduino exportado como global_arduino_controller: {arduino_controller is not None}")
-    # FIN DE LA PARTE AÑADIDA
     
     # Iniciar el servidor con Socket.IO en lugar de app.run()
     socketio.run(app, debug=DEBUG, host='0.0.0.0')
