@@ -130,19 +130,16 @@ def check_fingers_raised(hand_landmarks):
     }
 
 def control_servos_with_hand(finger_status):
-    """Control Arduino servos based on hand finger positions"""
-    # Forzar verificación y actualización del estado de conexión
-    from arduino_bridge import force_connection_status_check, move_servo
+    """Control Arduino servos based on hand finger positions using Socket.IO events"""
+    global socketio_instance
     
-    # Comprobar estado de conexión real
-    connection_status = force_connection_status_check()
-    
-    if not connection_status:
-        logger.warning("Arduino no conectado para control de servos")
+    # Verificar si tenemos instancia de Socket.IO disponible
+    if socketio_instance is None:
+        logger.error("Socket.IO no inicializado en video_processing")
         return False
     
     try:
-        # Map fingers to specific servos
+        # Mapeo de dedos a servos específicos
         servo_mapping = {
             "thumb": 2,    # Servo en pin 2
             "index": 3,    # Servo en pin 3
@@ -152,28 +149,33 @@ def control_servos_with_hand(finger_status):
         }
         
         # Log para depuración
-        logger.info(f"Enviando comandos para {len(servo_mapping)} servos basados en gestos")
+        logger.info(f"GESTOS: Enviando eventos para {len(servo_mapping)} servos basados en gestos vía Socket.IO")
         
         results = []
         
-        # Set servo angles based on finger status
+        # Enviar comandos de servo basados en estado de dedos
         for finger, servo_id in servo_mapping.items():
             angle = 180 if finger_status[finger] else 0
-            logger.info(f"GESTOS: Enviando comando para servo {servo_id} ({finger}) a {angle}°")
+            logger.info(f"GESTOS: Emitiendo evento Socket.IO para servo {servo_id} ({finger}) a {angle}°")
             
-            success = move_servo(servo_id, angle)
-            
-            if not success:
-                logger.error(f"Error al establecer servo para {finger}")
-                results.append(False)
-            else:
-                logger.info(f"Servo {servo_id} ({finger}) establecido a {angle}°")
+            # Emitir evento a través de Socket.IO
+            try:
+                # Este evento será capturado por todos los clientes y el servidor
+                socketio_instance.emit('hand_gesture_servo', {
+                    'servo_id': servo_id,
+                    'angle': angle,
+                    'finger': finger
+                })
+                logger.info(f"Evento Socket.IO emitido correctamente para {finger}")
                 results.append(True)
+            except Exception as e:
+                logger.error(f"Error al emitir evento Socket.IO para {finger}: {str(e)}")
+                results.append(False)
         
         return all(results)
     
     except Exception as e:
-        logger.error(f"Error controlando servos: {str(e)}")
+        logger.error(f"Error controlando servos por gestos: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         return False
