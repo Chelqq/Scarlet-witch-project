@@ -47,37 +47,44 @@ def set_app_context(app, socketio):
         if 'ARDUINO_CONNECTION' in app.config:
             connection_info = app.config['ARDUINO_CONNECTION']
 
-
 def initialize_arduino_for_video():
     """Ensure Arduino controller is properly initialized for video processing"""
-    global arduino_initialized, arduino_controller, connection_info
+    global arduino_initialized, arduino_controller
     
     if arduino_initialized:
         return True
     
     try:
-        # Verificar si el controlador ya existe y está conectado
-        if arduino_controller is not None and arduino_controller.is_connected():
-            logger.info("Arduino ya está conectado, usando conexión existente")
-            arduino_initialized = True
-            return True
+        # Importar el bridge y forzar una comprobación de estado
+        from arduino_bridge import force_connection_status_check, register_arduino_controller
+        
+        # Verificar si hay un controlador global en run.py
+        import sys
+        run_module = sys.modules.get('run')
+        if run_module and hasattr(run_module, 'arduino_controller'):
+            arduino_controller_global = run_module.arduino_controller
             
-        # Verificar información de conexión global
-        with lock:
-            current_connection = connection_info
-            
-        if current_connection is not None and current_connection.get('is_connected', False):
-            logger.info(f"Usando información de conexión global: {current_connection}")
-            arduino_initialized = True
-            return True
-            
-        # No intentar conectar de nuevo, sólo marcar como inicializado
-        logger.info("No hay información de conexión disponible, marcando como inicializado sin conectar")
+            # Si existe el controlador y las interfaces lo están usando,
+            # registrarlo en el bridge para asegurar la sincronización
+            if arduino_controller_global is not None:
+                logger.info("Registrando controlador global en bridge desde video_processing")
+                register_arduino_controller(arduino_controller_global)
+                
+                # Forzar una verificación del estado real
+                is_connected = force_connection_status_check()
+                logger.info(f"Estado de conexión actual: {is_connected}")
+                
+                arduino_initialized = True
+                return True
+        
+        logger.info("No se encontró controlador global, inicialización básica")
         arduino_initialized = True
-        return True
+        return False
         
     except Exception as e:
         logger.error(f"Error initializing Arduino for video: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         arduino_initialized = True  # Marcamos como inicializado para evitar reintento
         return False
 
@@ -124,84 +131,51 @@ def check_fingers_raised(hand_landmarks):
 
 def control_servos_with_hand(finger_status):
     """Control Arduino servos based on hand finger positions"""
-    import sys
+    # Forzar verificación y actualización del estado de conexión
+    from arduino_bridge import force_connection_status_check, move_servo
     
-    # Intentar obtener el controlador directamente
-    try:
-        # Obtener módulo run.py
-        run_module = sys.modules.get('run')
-        if run_module and hasattr(run_module, 'arduino_controller'):
-            arduino_controller = run_module.arduino_controller
-            
-            if arduino_controller and arduino_controller.is_connected():
-                logger.info("Usando arduino_controller global directamente")
-                
-                # Map fingers to specific servos
-                servo_mapping = {
-                    "thumb": 2,
-                    "index": 3,
-                    "middle": 4,
-                    "ring": 5,
-                    "pinky": 6
-                }
-                
-                results = []
-                for finger, servo_id in servo_mapping.items():
-                    angle = 180 if finger_status[finger] else 0
-                    logger.info(f"GESTOS: Enviando comando para servo {servo_id} ({finger}) a {angle}°")
-                    success, message = arduino_controller.set_servo(servo_id, angle)
-                    logger.info(f"Resultado: {success} - {message}")
-                    results.append(success)
-                
-                return all(results)
-            else:
-                logger.warning("Controlador global existe pero no está conectado")
-        else:
-            logger.warning("No se pudo acceder al controlador global")
-    except Exception as e:
-        logger.error(f"Error accediendo al controlador global: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-    
-    # Fallback al sistema anterior
-    logger.warning("Fallback a bridge para control de servos")
-    from arduino_bridge import move_servo, is_connected
-    
-    connection_status = is_connected()
-    logger.info(f"Estado de conexión según bridge: {connection_status}")
+    # Comprobar estado de conexión real
+    connection_status = force_connection_status_check()
     
     if not connection_status:
-        logger.warning("Arduino not connected for servo control")
+        logger.warning("Arduino no conectado para control de servos")
         return False
     
     try:
         # Map fingers to specific servos
         servo_mapping = {
-            "thumb": 2,    # Servo on pin 2
-            "index": 3,    # Servo on pin 3
-            "middle": 4,   # Servo on pin 4
-            "ring": 5,     # Servo on pin 5
-            "pinky": 6     # Servo on pin 6
+            "thumb": 2,    # Servo en pin 2
+            "index": 3,    # Servo en pin 3
+            "middle": 4,   # Servo en pin 4
+            "ring": 5,     # Servo en pin 5
+            "pinky": 6     # Servo en pin 6
         }
+        
+        # Log para depuración
+        logger.info(f"Enviando comandos para {len(servo_mapping)} servos basados en gestos")
         
         results = []
         
         # Set servo angles based on finger status
         for finger, servo_id in servo_mapping.items():
             angle = 180 if finger_status[finger] else 0
+            logger.info(f"GESTOS: Enviando comando para servo {servo_id} ({finger}) a {angle}°")
+            
             success = move_servo(servo_id, angle)
             
             if not success:
-                logger.error(f"Failed to set servo for {finger}")
+                logger.error(f"Error al establecer servo para {finger}")
                 results.append(False)
             else:
-                logger.info(f"Set servo {servo_id} ({finger}) to {angle}°")
+                logger.info(f"Servo {servo_id} ({finger}) establecido a {angle}°")
                 results.append(True)
         
         return all(results)
     
     except Exception as e:
-        logger.error(f"Error controlling servos: {str(e)}")
+        logger.error(f"Error controlando servos: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return False
 
 def process_frame(frame, hands):
