@@ -547,19 +547,19 @@
                     
                     <ul class="nav nav-pills mb-3" id="connection-tabs" role="tablist">
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link active w-100" id="direct-tab" data-bs-toggle="pill" data-bs-target="#direct-connection-form" type="button" role="tab" aria-controls="direct-connection-form" aria-selected="true">
+                            <button class="nav-link active w-100" id="direct-tab" data-bs-toggle="pill" data-bs-target="#direct-connection-form" type="button" role="tab" aria-controls="direct-connection-form" aria-selected="false">
                                 Conexión directa Arduino
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link w-100" id="wifi-tab" data-bs-toggle="pill" data-bs-target="#wifi-connection-form" type="button" role="tab" aria-controls="wifi-connection-form" aria-selected="false">
+                            <button class="nav-link w-100" id="wifi-tab" data-bs-toggle="pill" data-bs-target="#wifi-connection-form" type="button" role="tab" aria-controls="wifi-connection-form" aria-selected="true">
                                 Conexión WiFi (ESP32)
                             </button>
                         </li>
                     </ul>
                     
                     <div class="tab-content mt-3">
-                        <div class="tab-pane fade show active" id="direct-connection-form" role="tabpanel" aria-labelledby="direct-tab">
+                        <div class="tab-pane fade" id="direct-connection-form" role="tabpanel" aria-labelledby="direct-tab">
                             <div class="mb-3">
                                 <label for="arduino-port" class="form-label">Puerto Arduino</label>
                                 <div class="input-group">
@@ -569,7 +569,7 @@
                             </div>
                         </div>
                         
-                        <div class="tab-pane fade" id="wifi-connection-form" role="tabpanel" aria-labelledby="wifi-tab">
+                        <div class="tab-pane fade show active" id="wifi-connection-form" role="tabpanel" aria-labelledby="wifi-tab">
                             <div class="mb-3">
                                 <label for="esp32-ip" class="form-label">Dirección IP ESP32</label>
                                 <input type="text" class="form-control" id="esp32-ip" placeholder="192.168.0.21">
