@@ -1,5 +1,3 @@
-# Archivo apps/arduino/concurrency_patch.py 
-
 import logging
 import os
 from functools import wraps

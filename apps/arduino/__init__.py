@@ -12,8 +12,6 @@ blueprint = Blueprint(
     url_prefix='/arduino'
 )
 
-# Aplicar las mejoras de concurrencia después de importar el módulo completo
-# para evitar importaciones circulares
 
 def apply_improvements():
     """Aplica las mejoras de concurrencia después que toda la app se ha inicializado"""
@@ -30,6 +28,3 @@ def apply_improvements():
         logger.error(f"Error al inicializar mejoras de concurrencia: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
-
-# No llamamos a apply_improvements() aquí
-# Lo llamaremos desde routes.py después de que todo se haya inicializado

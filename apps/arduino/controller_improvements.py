@@ -1,5 +1,3 @@
-# Archivo apps/arduino/controller_improvements.py - Versión corregida
-
 import time
 import threading
 import logging
