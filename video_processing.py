@@ -242,10 +242,10 @@ def control_servos_with_hand(finger_status):
     # Mapeo de dedos a servos
     servo_mapping = {
         "thumb": 2,    # Servo en pin 2
-        "index": 3,    # Servo en pin 3
-        "middle": 4,   # Servo en pin 4
-        "ring": 5,     # Servo en pin 5
-        "pinky": 6     # Servo en pin 6
+        "index": 4,    # Servo en pin 3
+        "middle": 6,   # Servo en pin 4
+        "ring": 8,     # Servo en pin 5
+        "pinky": 10     # Servo en pin 6
     }
     
     # Crear lista de comandos en el mismo formato que las secuencias
