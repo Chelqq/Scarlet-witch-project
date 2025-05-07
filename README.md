@@ -15,7 +15,7 @@
 
 ## ✨ Features
 
-- **🎮 Direct Servo Control** - Individually control up to 30 servomotors with intuitive sliders
+- **🎮 Direct Servo Control** - Individually control up to 20 servomotors with intuitive sliders
 - **⏱️ Programmable Sequences** - Create, save, and execute custom movement sequences
 - **👋 Gesture Control** - Control servos with hand gestures through computer vision
 - **🔌 Flexible Connectivity** - Direct serial connection or WiFi through ESP32
