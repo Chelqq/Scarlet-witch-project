@@ -25,7 +25,8 @@ class ArduinoController:
         
         self.connected = False
         self.lock = threading.RLock()
-        self.servo_pins = [i for i in range(2, 32)]
+        self.servo_pins = [i for i in range(0, 14)] + [i for i in range(16, 22)]
+
         
         # New: watchdog timer para reconexión automática
         self.watchdog_active = False
@@ -251,7 +252,7 @@ class ArduinoController:
         if not (0 <= angle <= 180):
             return False, "Ángulo fuera de rango (0-180)"
         if servo_id not in self.servo_pins:
-            return False, f"ID de servo inválido, debe estar entre {min(self.servo_pins)} y {max(self.servo_pins)}"
+            return False, f"ID de servo inválido, debe ser entre 0-13 o 16-21 (los pines 14-15 se usan para UART)"
 
         # Si no está conectado, intentar reconexión
         if not self.is_connected():

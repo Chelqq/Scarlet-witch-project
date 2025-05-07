@@ -679,50 +679,41 @@
 
 <script>
     // Configuración
-    const numServos = 30;
+    const numServos = 20;
     let servoPositions = Array(numServos).fill(90); // Inicialmente todos en 90°
     
     // Mapeo de categorías de servos
     const servoCategories = {
-        head: [2, 3, 4, 5, 6, 7],
-        arms: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-        torso: [20, 21, 22, 23, 24, 25],
-        legs: [26, 27, 28, 29, 30, 31]
-    };
-    
-    // Nombres descriptivos de servos
+    head: [0, 1, 2, 3, 4, 5],
+    arms: [6, 7, 8, 9, 10, 11, 12, 13, 16, 17],
+    torso: [18, 19, 20, 21],
+    legs: [] // Ya no hay pines para piernas con el nuevo mapeado
+};
+
+        // Nombres descriptivos de servos
     const servoNames = {
-        2: "Pulgar Izquierdo",
+        0: "Pulgar Izquierdo",
+        1: "-",
+        2: "Indice Izquierdo",
         3: "-",
-        4: "Indice Izquierdo",
-        5: "-",
-        6: "Ojo Derecho",
-        7: "Mandíbula",
-        8: "Hombro Izq (Rotación)",
-        9: "Hombro Izq (Elevación)",
-        10: "Codo Izquierdo",
-        11: "Muñeca Izquierda",
-        12: "Pulgar Izquierdo",
-        13: "Dedos Izquierdos",
-        14: "Hombro Der (Rotación)",
-        15: "Hombro Der (Elevación)",
+        4: "Ojo Derecho",
+        5: "Mandíbula",
+        6: "Hombro Izq (Rotación)",
+        7: "Hombro Izq (Elevación)",
+        8: "Codo Izquierdo",
+        9: "Muñeca Izquierda",
+        10: "Pulgar Izquierdo",
+        11: "Dedos Izquierdos",
+        12: "Hombro Der (Rotación)",
+        13: "Hombro Der (Elevación)",
         16: "Codo Derecho",
         17: "Muñeca Derecha",
         18: "Pulgar Derecho",
         19: "Dedos Derechos",
         20: "Torso (Rotación)",
-        21: "Torso (Inclinación)",
-        22: "Torso (Lateral)",
-        23: "Cadera (Rotación)",
-        24: "Cadera (Inclinación)",
-        25: "Cadera (Lateral)",
-        26: "Rodilla Izquierda",
-        27: "Tobillo Izquierdo",
-        28: "Pie Izquierdo",
-        29: "Rodilla Derecha",
-        30: "Tobillo Derecho",
-        31: "Pie Derecho"
-    };
+        21: "Torso (Inclinación)"
+};
+
     
     // Función para renderizar las tarjetas de servos
     function renderServoCards() {

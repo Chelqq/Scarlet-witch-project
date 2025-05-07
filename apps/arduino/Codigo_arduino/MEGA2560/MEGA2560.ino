@@ -2,8 +2,8 @@
 
 //192.168.0.21
 
-Servo servos[30];  // Array para 30 servos
-int servo_pins[30] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39};
+Servo servos[20];  // Array para 20 servos (excluimos pines 14 y 15)
+int servo_pins[20] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21};
 
 // Variables para watchdog y sistema de timeout
 unsigned long lastCommandTime = 0;
@@ -15,9 +15,9 @@ void setup() {
     delay(1000);  // Esperar 1 segundo para inicializar - reducido de 2s
 
     // Asociar los pines con los servos
-    for (int i = 0; i < 30; i++) {
+    for (int i = 0; i < 20; i++) {
         servos[i].attach(servo_pins[i]);
-        servos[i].write(0);  // Inicializar servos en 90°
+        servos[i].write(0);  // Inicializar servos en 0°
     }
 
     Serial3.println("Listo para recibir comandos.");
@@ -47,11 +47,17 @@ void loop() {
             int servo_id = command.substring(0, commaIndex).toInt();
             int angle = command.substring(commaIndex + 1).toInt();
 
-            if (servo_id >= 2 && servo_id <= 31 && angle >= 0 && angle <= 180) {
-                int servo_index = servo_id - 2;  // Convertir pin a índice en array
+            // Validar rango de servo_id (0-13 y 16-21) y ángulo (0-180)
+            if (((servo_id >= 0 && servo_id <= 13) || (servo_id >= 16 && servo_id <= 21)) && angle >= 0 && angle <= 180) {
+                int servo_index;
+                if (servo_id <= 13) {
+                    servo_index = servo_id; // Para pines 0-13
+                } else {
+                    servo_index = servo_id - 2; // Para pines 16-21, ajustar por los pines 14-15 saltados
+                }
                 
                 // Verificar que el servo existe antes de intentar moverlo
-                if (servo_index >= 0 && servo_index < 30) {
+                if (servo_index >= 0 && servo_index < 20) {
                     servos[servo_index].write(angle);
                     Serial3.print("Servo ");
                     Serial3.print(servo_id);
@@ -63,7 +69,7 @@ void loop() {
                     Serial3.println(servo_index);
                 }
             } else {
-                Serial3.print("Error: valores fuera de rango. Servo ID debe ser 2-31, ángulo 0-180. Recibido: ");
+                Serial3.print("Error: valores fuera de rango. Servo ID debe ser 0-13 o 16-21, ángulo 0-180. Recibido: ");
                 Serial3.print(servo_id);
                 Serial3.print(",");
                 Serial3.println(angle);
