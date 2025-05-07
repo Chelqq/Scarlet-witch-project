@@ -311,34 +311,51 @@
             deleteSequence(sequenceId);
         });
         
-        // Funciones
         function loadSavedSequences() {
-            $('#loading-area').show();
+    $('#loading-area').show();
+    
+    $.ajax({
+        url: '/arduino/sequences',
+        method: 'GET',
+        success: function(response) {
+            // Depuración detallada de la respuesta
+            console.log("Respuesta completa:", response);
+            $('#loading-area').hide();
             
-            $.ajax({
-                url: '/arduino/sequences',
-                method: 'GET',
-                success: function(response) {
-                    $('#loading-area').hide();
-                    
-                    if (response.status === 'success') {
-                        loadedSequences = (response.sequences || []).map(validateSequence);
-                        renderSequences(loadedSequences);
-                    } else {
-                        showNotification('danger', response.message || 'Error al cargar secuencias');
-                    }
-                },
-                error: function(xhr) {
-                    $('#loading-area').hide();
-                    showNotification('danger', xhr.responseJSON?.message || 'Error al cargar secuencias');
-                    renderSequences([]);
-                }
-            });
+            // El servidor devuelve las secuencias directamente en response.sequences
+            // sin el objeto status:success que el código está esperando
+            if (response.sequences) {
+                console.log("Secuencias encontradas:", response.sequences.length);
+                loadedSequences = response.sequences.map(function(seq) {
+                    console.log("Procesando secuencia:", seq.name);
+                    return seq;
+                });
+                renderSequences(loadedSequences);
+            } 
+            // Intenta también esta estructura alternativa
+            else if (Array.isArray(response)) {
+                console.log("Respuesta es un array:", response.length);
+                loadedSequences = response;
+                renderSequences(loadedSequences);
+            }
+            else {
+                console.error("Formato de respuesta inesperado:", response);
+                showNotification('danger', 'Formato de respuesta inesperado');
+                renderSequences([]);
+            }
+        },
+        error: function(xhr) {
+            console.error("Error en la solicitud:", xhr);
+            $('#loading-area').hide();
+            showNotification('danger', xhr.responseJSON?.message || 'Error al cargar secuencias');
+            renderSequences([]);
         }
+    });
+}
         
         function renderSequences(sequences) {
             const container = $('#sequences-container');
-            
+            console.log("Renderizando secuencias:", sequences);
             if (sequences.length === 0) {
                 container.html('<div class="col-12"><div class="alert alert-info">No hay secuencias guardadas. Crea una nueva secuencia para comenzar.</div></div>');
                 return;
@@ -517,6 +534,7 @@
             
             return options;
         }
+
         function openEditModal(sequence) {
             resetSequenceModal();
             
@@ -551,10 +569,6 @@
             if ($('#steps-container .sequence-step').length === 0) {
                 showNotification('warning', 'La secuencia debe tener al menos un paso');
                 return;
-            }
-            if (!isValidServoId(servoId)) {
-            showNotification('warning', `ID de servo inválido: ${servoId}. Debe ser entre 0-13 o 16-21.`);
-            return;
             }
             
             // Recopilar datos de la secuencia

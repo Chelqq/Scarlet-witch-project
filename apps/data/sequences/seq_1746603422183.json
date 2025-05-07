@@ -1,0 +1,29 @@
+{
+  "id": "seq_1746603422183",
+  "name": "Alejandro",
+  "description": "",
+  "loop": false,
+  "defaultDelay": 100,
+  "steps": [
+    {
+      "servo_id": 17,
+      "angle": 90,
+      "delay": 100
+    },
+    {
+      "servo_id": 3,
+      "angle": 66,
+      "delay": 100
+    },
+    {
+      "servo_id": 0,
+      "angle": 0,
+      "delay": 100
+    },
+    {
+      "servo_id": 16,
+      "angle": 44,
+      "delay": 100
+    }
+  ]
+}

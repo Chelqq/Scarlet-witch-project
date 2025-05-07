@@ -22,17 +22,30 @@ def get_sequences():
     try:
         sequences = []
         
+        # Verificar que el directorio existe
+        logger.info(f"Buscando secuencias en directorio: {SEQUENCES_DIR}")
+        if not os.path.exists(SEQUENCES_DIR):
+            logger.error(f"El directorio de secuencias no existe: {SEQUENCES_DIR}")
+            os.makedirs(SEQUENCES_DIR, exist_ok=True)
+            logger.info(f"Directorio creado")
+        
+        # Listar archivos en el directorio
+        files = os.listdir(SEQUENCES_DIR)
+        logger.info(f"Archivos encontrados: {files}")
+        
         # Leer todos los archivos JSON en el directorio de secuencias
-        for filename in os.listdir(SEQUENCES_DIR):
+        for filename in files:
             if filename.endswith('.json'):
                 file_path = os.path.join(SEQUENCES_DIR, filename)
                 try:
                     with open(file_path, 'r') as f:
                         sequence = json.load(f)
                         sequences.append(sequence)
+                        logger.info(f"Secuencia cargada: {sequence.get('name', 'Sin nombre')}")
                 except Exception as e:
                     logger.error(f"Error al leer archivo de secuencia {filename}: {str(e)}")
         
+        logger.info(f"Total de secuencias cargadas: {len(sequences)}")
         return jsonify({
             'status': 'success',
             'sequences': sequences
