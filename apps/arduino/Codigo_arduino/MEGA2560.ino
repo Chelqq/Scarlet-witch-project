@@ -8,8 +8,8 @@ unsigned long lastCommandTime = 0;
 const unsigned long WATCHDOG_TIMEOUT = 10000; // 10 segundos
 
 void setup() {
-    Serial.begin(9600);  // Inicializar comunicación serial
-    Serial.setTimeout(50); // Reducir el timeout de lectura a 50ms
+    Serial3.begin(9600);  // Inicializar comunicación serial
+    Serial.setTime  out(50); // Reducir el timeout de lectura a 50ms
     delay(1000);  // Esperar 1 segundo para inicializar - reducido de 2s
 
     // Asociar los pines con los servos

@@ -10,8 +10,8 @@ unsigned long lastCommandTime = 0;
 const unsigned long WATCHDOG_TIMEOUT = 30000; // 30 segundos
 
 void setup() {
-    Serial.begin(9600);  // Inicializar comunicación serial
-    Serial.setTimeout(50); // Reducir el timeout de lectura a 50ms
+    Serial3.begin(9600);  // Inicializar comunicación Serial3
+    Serial3.setTimeout(50); // Reducir el timeout de lectura a 50ms
     delay(1000);  // Esperar 1 segundo para inicializar - reducido de 2s
 
     // Asociar los pines con los servos
@@ -20,24 +20,24 @@ void setup() {
         servos[i].write(0);  // Inicializar servos en 90°
     }
 
-    Serial.println("Listo para recibir comandos.");
+    Serial3.println("Listo para recibir comandos.");
     lastCommandTime = millis();
 }
 
 void loop() {
     // Implementar un watchdog básico
     if (millis() - lastCommandTime > WATCHDOG_TIMEOUT) {
-        // Reiniciar comunicación serial si hay un largo periodo sin comandos
-        Serial.end();
+        // Reiniciar comunicación Serial3 si hay un largo periodo sin comandos
+        Serial3.end();
         delay(100);
-        Serial.begin(9600);
-        Serial.setTimeout(50);
-        Serial.println("Comunicación reiniciada por watchdog");
+        Serial3.begin(9600);
+        Serial3.setTimeout(50);
+        Serial3.println("Comunicación reiniciada por watchdog");
         lastCommandTime = millis();
     }
   
-    if (Serial.available() > 0) {
-        String command = Serial.readStringUntil('\n');  // Leer comando
+    if (Serial3.available() > 0) {
+        String command = Serial3.readStringUntil('\n');  // Leer comando
         command.trim();
         lastCommandTime = millis(); // Actualizar tiempo del último comando
 
@@ -53,29 +53,29 @@ void loop() {
                 // Verificar que el servo existe antes de intentar moverlo
                 if (servo_index >= 0 && servo_index < 30) {
                     servos[servo_index].write(angle);
-                    Serial.print("Servo ");
-                    Serial.print(servo_id);
-                    Serial.print(" ajustado a ");
-                    Serial.print(angle);
-                    Serial.println("°");
+                    Serial3.print("Servo ");
+                    Serial3.print(servo_id);
+                    Serial3.print(" ajustado a ");
+                    Serial3.print(angle);
+                    Serial3.println("°");
                 } else {
-                    Serial.print("Error: índice de servo fuera de rango: ");
-                    Serial.println(servo_index);
+                    Serial3.print("Error: índice de servo fuera de rango: ");
+                    Serial3.println(servo_index);
                 }
             } else {
-                Serial.print("Error: valores fuera de rango. Servo ID debe ser 2-31, ángulo 0-180. Recibido: ");
-                Serial.print(servo_id);
-                Serial.print(",");
-                Serial.println(angle);
+                Serial3.print("Error: valores fuera de rango. Servo ID debe ser 2-31, ángulo 0-180. Recibido: ");
+                Serial3.print(servo_id);
+                Serial3.print(",");
+                Serial3.println(angle);
             }
         } else {
-            Serial.print("Comando inválido: ");
-            Serial.println(command);
+            Serial3.print("Comando inválido: ");
+            Serial3.println(command);
         }
         
-        // Limpiar buffer serial de entrada
-        while (Serial.available() > 0) {
-            Serial.read();
+        // Limpiar buffer Serial3 de entrada
+        while (Serial3.available() > 0) {
+            Serial3.read();
         }
     }
 }
