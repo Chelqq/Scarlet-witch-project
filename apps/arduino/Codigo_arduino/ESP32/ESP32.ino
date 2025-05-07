@@ -13,6 +13,12 @@ WiFiClient client;
 // Puerto serie para comunicación con Arduino MEGA
 HardwareSerial ArduinoSerial(2); // UART2 en ESP32
 
+// Variables para controlar la sincronización de comandos
+bool awaitingResponse = false;
+String lastCommand = "";
+unsigned long commandSentTime = 0;
+const unsigned long RESPONSE_TIMEOUT = 500; // 500ms timeout para esperar respuesta
+
 void setup() {
   // Iniciar puerto serie de depuración
   Serial.begin(115200);
@@ -53,25 +59,48 @@ void loop() {
     }
   }
   
-  // Comprobar si hay datos desde el cliente TCP
-  if (client && client.connected() && client.available()) {
+  // Si estamos esperando respuesta, comprobar si ha llegado o si ha vencido el timeout
+  if (awaitingResponse) {
+    if (ArduinoSerial.available()) {
+      String response = ArduinoSerial.readStringUntil('\n');
+      response.trim();
+      Serial.print("Recibido del Arduino: ");
+      Serial.println(response);
+      
+      // Reenviar respuesta al cliente TCP
+      if (client && client.connected()) {
+        client.println(response);
+      }
+      
+      // Marcar que ya no estamos esperando respuesta
+      awaitingResponse = false;
+    } else if (millis() - commandSentTime > RESPONSE_TIMEOUT) {
+      // Si ha pasado el timeout sin respuesta
+      Serial.println("Timeout esperando respuesta del Arduino");
+      if (client && client.connected()) {
+        client.println("ERROR: Timeout esperando respuesta del Arduino");
+      }
+      awaitingResponse = false;
+    }
+  }
+  // Solo procesar nuevos comandos si no estamos esperando respuesta
+  else if (client && client.connected() && client.available()) {
     String data = client.readStringUntil('\n');
+    data.trim();
     Serial.print("Recibido del cliente: ");
     Serial.println(data);
     
+    // Limpiar buffer serial antes de enviar nuevo comando
+    while (ArduinoSerial.available()) {
+      ArduinoSerial.read();
+    }
+    
     // Reenviar datos al Arduino
     ArduinoSerial.println(data);
-  }
-  
-  // Comprobar si hay datos desde el Arduino
-  if (ArduinoSerial.available()) {
-    String response = ArduinoSerial.readStringUntil('\n');
-    Serial.print("Recibido del Arduino: ");
-    Serial.println(response);
     
-    // Reenviar respuesta al cliente TCP
-    if (client && client.connected()) {
-      client.println(response);
-    }
+    // Guardar información del comando enviado
+    lastCommand = data;
+    commandSentTime = millis();
+    awaitingResponse = true;
   }
 }

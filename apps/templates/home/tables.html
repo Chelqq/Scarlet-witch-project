@@ -269,6 +269,18 @@
 <script src="{{ config.ASSETS_ROOT }}/js/arduino-websocket.js"></script>
 
 <script>
+    const numServos = 20; // Actualizado de 30 a 20 servos
+    const validServoPins = []; // Array con todos los pines válidos
+
+    // Llenar el array de pines válidos (0-13 y 16-21)
+    for (let i = 0; i <= 13; i++) {
+        validServoPins.push(i);
+    }
+    for (let i = 16; i <= 21; i++) {
+        validServoPins.push(i);
+    }
+
+
     $(document).ready(function() {
         // Variable global para almacenar las secuencias cargadas
         let loadedSequences = [];
@@ -310,7 +322,7 @@
                     $('#loading-area').hide();
                     
                     if (response.status === 'success') {
-                        loadedSequences = response.sequences || [];
+                        loadedSequences = (response.sequences || []).map(validateSequence);
                         renderSequences(loadedSequences);
                     } else {
                         showNotification('danger', response.message || 'Error al cargar secuencias');
@@ -440,6 +452,17 @@
             // Añadir al menos un paso inicial
             addSequenceStep();
         }
+
+        function validateSequence(sequence) {
+            if (!sequence || !sequence.steps) return sequence;
+            
+            // Filtrar los pasos con IDs de servo inválidos
+            sequence.steps = sequence.steps.filter(function(step) {
+                return isValidServoId(step.servo_id);
+            });
+            
+            return sequence;
+        }
         
         function addSequenceStep() {
             const stepIndex = $('#steps-container .sequence-step').length;
@@ -449,7 +472,7 @@
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label>Servo ID:</label>
+                                <label>Servo ID (0-13, 16-21):</label>
                                 <select class="form-control step-servo-id">
                                     ${generateServoOptions()}
                                 </select>
@@ -481,12 +504,19 @@
         
         function generateServoOptions() {
             let options = '';
-            for (let i = 2; i <= 31; i++) {
+            
+            // Generar opciones para pines 0-13
+            for (let i = 0; i <= 13; i++) {
                 options += `<option value="${i}">${i}</option>`;
             }
+            
+            // Generar opciones para pines 16-21 (saltando 14-15 que son UART)
+            for (let i = 16; i <= 21; i++) {
+                options += `<option value="${i}">${i}</option>`;
+            }
+            
             return options;
         }
-        
         function openEditModal(sequence) {
             resetSequenceModal();
             
@@ -497,7 +527,7 @@
             $('#loop-sequence').prop('checked', sequence.loop || false);
             $('#default-delay').val(sequence.defaultDelay || 100);
             
-            // Eliminar el paso inicial
+            // Eliminar el paso iniciakl
             $('#steps-container').empty();
             
             // Añadir cada paso de la secuencia
@@ -521,6 +551,10 @@
             if ($('#steps-container .sequence-step').length === 0) {
                 showNotification('warning', 'La secuencia debe tener al menos un paso');
                 return;
+            }
+            if (!isValidServoId(servoId)) {
+            showNotification('warning', `ID de servo inválido: ${servoId}. Debe ser entre 0-13 o 16-21.`);
+            return;
             }
             
             // Recopilar datos de la secuencia

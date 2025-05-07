@@ -1,8 +1,3 @@
-# Modificaciones a apps/arduino/routes.py
-
-# Las rutas HTTP existentes deben mantenerse para compatibilidad con versiones anteriores,
-# pero su funcionalidad interna debe delegarse a los controladores de Socket.IO
-
 from apps.arduino import blueprint
 from flask import request, jsonify, current_app
 from flask_login import login_required
@@ -18,10 +13,7 @@ logger = logging.getLogger(__name__)
 # Directorio para almacenar las secuencias guardadas
 SEQUENCES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'sequences')
 
-# Asegurar que el directorio existe
 os.makedirs(SEQUENCES_DIR, exist_ok=True)
-
-# Asegúrate de que estas funciones estén en apps/arduino/routes.py
 
 @blueprint.route('/sequences', methods=['GET'])
 @login_required
@@ -131,6 +123,40 @@ def status():
         return jsonify({
             'status': 'disconnected'
         })
+
+@blueprint.route('/sequences/<sequence_id>', methods=['DELETE'])
+@login_required
+def delete_sequence(sequence_id):
+    """Elimina una secuencia existente"""
+    try:
+        # Formar la ruta al archivo de secuencia
+        file_path = os.path.join(SEQUENCES_DIR, f"{sequence_id}.json")
+        
+        # Verificar si el archivo existe
+        if not os.path.exists(file_path):
+            return jsonify({
+                'status': 'error',
+                'message': f'La secuencia con ID {sequence_id} no existe'
+            }), 404
+        
+        # Eliminar el archivo
+        os.remove(file_path)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Secuencia eliminada correctamente',
+            'sequence_id': sequence_id
+        })
+    
+    except Exception as e:
+        import traceback
+        logger.error(f"Error al eliminar secuencia: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Error al eliminar secuencia: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
 
 @blueprint.route('/connect', methods=['POST'])
 @login_required
@@ -242,7 +268,6 @@ def connect():
             }), 500
             
     except Exception as e:
-        # Añade este bloque except al final de la función
         import traceback
         current_app.logger.error(f"Error en conexión: {str(e)}")
         current_app.logger.error(traceback.format_exc())
