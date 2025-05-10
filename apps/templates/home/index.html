@@ -626,14 +626,14 @@
             <div class="tab-content">
                 <!-- Vista por grupos -->
                 <div class="tab-pane fade show active" id="servos-grouped" role="tabpanel" aria-labelledby="view-grouped-tab">
-                    <!-- Cabeza y cuello -->
+                    <!-- Manos -->
                     <div class="servo-category">
-                        <h4 class="category-title">Cabeza y Cuello</h4>
+                        <h4 class="category-title">Manos</h4>
                         <div class="servo-grid" id="head-servos">
                             <!-- Servos 2-7 -->
                         </div>
                     </div>
-
+                    
                     <!-- Brazos -->
                     <div class="servo-category">
                         <h4 class="category-title">Brazos</h4>
@@ -679,14 +679,14 @@
 
 <script>
     // Configuración
-    const numServos = 20;
+    const numServos = 22;
     let servoPositions = Array(numServos).fill(90); // Inicialmente todos en 90°
     
     // Mapeo de categorías de servos
     const servoCategories = {
-    head: [0, 1, 2, 3, 4, 5],
-    arms: [6, 7, 8, 9, 10, 11, 12, 13, 16, 17],
-    torso: [18, 19, 20, 21],
+    head: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21],
+    //arms: [6, 7, 8, 9, 10, 11, 12, 13, 16, 17],
+    //torso: [18, 19, 20, 21],
     legs: [] // Ya no hay pines para piernas con el nuevo mapeado
 };
 
@@ -696,55 +696,54 @@
         1: "-",
         2: "Indice Izquierdo",
         3: "-",
-        4: "Ojo Derecho",
-        5: "Mandíbula",
-        6: "Hombro Izq (Rotación)",
-        7: "Hombro Izq (Elevación)",
-        8: "Codo Izquierdo",
-        9: "Muñeca Izquierda",
-        10: "Pulgar Izquierdo",
-        11: "Dedos Izquierdos",
-        12: "Hombro Der (Rotación)",
-        13: "Hombro Der (Elevación)",
-        16: "Codo Derecho",
-        17: "Muñeca Derecha",
-        18: "Pulgar Derecho",
-        19: "Dedos Derechos",
-        20: "Torso (Rotación)",
-        21: "Torso (Inclinación)"
+        4: "Medio Izquierdo",
+        5: "-",
+        6: "Anular Izquierdo",
+        7: "-",
+        8: "Meñique Izquierdo",
+        9: "-",
+        10: "Pulgar Derecho",
+        11: "-",
+        12: "Indice Derecho",
+        13: "-",
+        16: "-",
+        17: "Medio Derecho",
+        18: "-",
+        19: "Anular Derecho",
+        20: "-",
+        21: "Meñique Derecho",
 };
 
     
     // Función para renderizar las tarjetas de servos
     function renderServoCards() {
-        // Limpiar contenedores
-        $('#head-servos, #arms-servos, #torso-servos, #legs-servos, #all-servos').empty();
+    // Limpiar contenedores
+    $('#head-servos, #arms-servos, #torso-servos, #legs-servos, #all-servos').empty();
+    
+    // Generar tarjetas para cada servo, comenzando desde el pin 0
+    for (let i = 0; i < numServos; i++) {
+        const servoId = i; // Usar directamente el índice como ID del servo (pin 0 a 21)
+        const servoName = servoNames[servoId] || `Servo #${servoId}`;
+        const card = createServoCard(servoId, servoName);
         
-        // Generar tarjetas para cada servo
-        for (let i = 0; i < numServos; i++) {
-            const servoId = i + 2; // Pines 2-31
-            const servoName = servoNames[servoId] || `Servo #${servoId}`;
-            const card = createServoCard(servoId, servoName);
-            
-            // Agregar a la vista completa
-            $('#all-servos').append(card);
-            
-            // Agregar a la categoría correspondiente
-            if (servoCategories.head.includes(servoId)) {
-                $('#head-servos').append(card);
-            } else if (servoCategories.arms.includes(servoId)) {
-                $('#arms-servos').append(card);
-            } else if (servoCategories.torso.includes(servoId)) {
-                $('#torso-servos').append(card);
-            } else if (servoCategories.legs.includes(servoId)) {
-                $('#legs-servos').append(card);
-            }
+        // Agregar a la vista completa
+        $('#all-servos').append(card);
+        
+        // Agregar a la categoría correspondiente
+        if (servoCategories.head.includes(servoId)) {
+            $('#head-servos').append(card);
+        } else if (servoCategories.arms.includes(servoId)) {
+            $('#arms-servos').append(card);
+        } else if (servoCategories.torso.includes(servoId)) {
+            $('#torso-servos').append(card);
+        } else if (servoCategories.legs.includes(servoId)) {
+            $('#legs-servos').append(card);
         }
-        
-        // Agregar event listeners a los controles
-        setupServoControls();
     }
     
+    // Agregar event listeners a los controles
+    setupServoControls();
+}
     // Crear tarjeta para un servo específico
     function createServoCard(servoId, servoName) {
         return `
@@ -756,9 +755,9 @@
                             <div class="servo-pin">Pin ${servoId}</div>
                         </div>
                     </div>
-                    <div class="position-display" id="position-${servoId}">${servoPositions[servoId - 2]}°</div>
+                    <div class="position-display" id="position-${servoId}">${servoPositions[servoId]}°</div>
                     <input type="range" class="form-range servo-slider" 
-                           min="0" max="180" value="${servoPositions[servoId - 2]}" 
+                           min="0" max="180" value="${servoPositions[servoId]}" 
                            id="slider-${servoId}" data-servo-id="${servoId}">
                     <div class="slider-marks">
                         <span>0°</span>
@@ -817,10 +816,10 @@
     // Mover servo con reintentos
     function moveServoWithRetry(servoId, position) {
         // Guardar la posición anterior para recuperarla en caso de error
-        const previousPosition = servoPositions[servoId - 2];
+        const previousPosition = servoPositions[servoId];
         
         // Actualizar la posición localmente de inmediato
-        servoPositions[servoId - 2] = position;
+        servoPositions[servoId] = position;
         
         // Animar la tarjeta del servo activado
         $(`#slider-${servoId}`).closest('.servo-card').css('box-shadow', '0 0 15px rgba(225, 78, 202, 0.7)');
@@ -836,7 +835,7 @@
                 // Revertir en caso de error
                 $(`#position-${servoId}`).text(previousPosition + '°');
                 $(`#slider-${servoId}`).val(previousPosition);
-                servoPositions[servoId - 2] = previousPosition;
+                servoPositions[servoId] = previousPosition;
                 
                 // Si el error es por falta de conexión, intentar reconectar
                 if (!isConnected) {
