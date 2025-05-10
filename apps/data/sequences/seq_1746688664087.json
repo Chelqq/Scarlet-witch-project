@@ -1,0 +1,19 @@
+{
+  "id": "seq_1746688664087",
+  "name": "Saludar",
+  "description": "Usa los dedos ind\u00edce y medio para hacer un simbolo de paz",
+  "loop": false,
+  "defaultDelay": 100,
+  "steps": [
+    {
+      "servo_id": 2,
+      "angle": 180,
+      "delay": 100
+    },
+    {
+      "servo_id": 4,
+      "angle": 90,
+      "delay": 100
+    }
+  ]
+}

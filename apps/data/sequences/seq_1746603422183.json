@@ -1,7 +1,7 @@
 {
   "id": "seq_1746603422183",
-  "name": "Alejandro",
-  "description": "",
+  "name": "Cuernos",
+  "description": "Crea cuernos con los dedos",
   "loop": false,
   "defaultDelay": 100,
   "steps": [

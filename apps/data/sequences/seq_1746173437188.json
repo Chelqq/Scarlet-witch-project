@@ -1,13 +1,38 @@
 {
   "id": "seq_1746173437188",
-  "name": "Checdfsk fsdfssdffingers",
-  "description": "",
+  "name": "Check fingers",
+  "description": "Check for fingers",
   "loop": false,
   "defaultDelay": 100,
   "steps": [
     {
       "servo_id": 2,
       "angle": 90,
+      "delay": 100
+    },
+    {
+      "servo_id": 0,
+      "angle": 90,
+      "delay": 100
+    },
+    {
+      "servo_id": 1,
+      "angle": 0,
+      "delay": 100
+    },
+    {
+      "servo_id": 4,
+      "angle": 170,
+      "delay": 100
+    },
+    {
+      "servo_id": 0,
+      "angle": 90,
+      "delay": 100
+    },
+    {
+      "servo_id": 13,
+      "angle": 0,
       "delay": 100
     }
   ]
