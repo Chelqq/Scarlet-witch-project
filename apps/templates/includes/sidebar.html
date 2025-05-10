@@ -21,14 +21,19 @@
                         <i class="tim-icons icon-single-copy-04"></i>
                         <p>Project Intro</p>
                     </a>
+                </li>
                 <li class="{% if 'map' in segment %} active {% endif %}">
                     <a href="/map.html">
                         <i class="tim-icons icon-vector"></i>
                         <p>Body control</p>
                     </a>
                 </li>
+                <li class="{% if 'tables' in segment %} active {% endif %}">
+                    <a href="/tables.html">
+                        <i class="tim-icons icon-puzzle-10"></i>
+                        <p>Pre programar</p>
+                    </a>
                 </li>
-<!--                 
                 <li class="{% if 'icons' in segment %} active {% endif %}">
                     <a href="/icons.html">
                         <i class="tim-icons icon-atom"></i>
@@ -41,18 +46,13 @@
                         <p>Notifications</p>
                     </a>
                 </li> 
-                <li class="{% if 'tables' in segment %} active {% endif %}">
-                    <a href="/tables.html">
-                        <i class="tim-icons icon-puzzle-10"></i>
-                        <p>Table List</p>
-                    </a>
-                </li>
                 <li class="{% if 'typography' in segment %} active {% endif %}">
                     <a href="/typography.html">
                         <i class="tim-icons icon-align-center"></i>
                         <p>Typography</p>
                     </a>
                 </li>
+                <!--                 
                 -->
                 <li>
                     <a href="{{ url_for('authentication_blueprint.logout') }}">

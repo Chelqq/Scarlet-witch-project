@@ -1,0 +1,24 @@
+{
+  "id": "seq_1746084303189",
+  "name": "Routine 1",
+  "description": "test1",
+  "loop": false,
+  "defaultDelay": 100,
+  "steps": [
+    {
+      "servo_id": 12,
+      "angle": 33,
+      "delay": 100
+    },
+    {
+      "servo_id": 2,
+      "angle": 90,
+      "delay": 100
+    },
+    {
+      "servo_id": 17,
+      "angle": 90,
+      "delay": 100
+    }
+  ]
+}
